@@ -1,0 +1,22 @@
+{
+  "name": "twitch-adblock-local",
+  "version": "0.3.44",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build && vite build --config vite.player.config.ts && cp manifest.json dist/manifest.json && cp dist/src/popup/popup.html dist/popup.html && mkdir -p dist/icons && cp icons/icon16.png icons/icon32.png icons/icon48.png icons/icon128.png dist/icons/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": { "hls.js": "^1.6.15" },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "@types/chrome": "^0.0.330",
+    "@types/node": "^24.0.0",
+    "jsdom": "^27.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
+    "vitest": "^4.0.8"
+  }
+}
