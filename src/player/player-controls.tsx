@@ -46,7 +46,6 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const [muted, setMuted] = useState(video.muted || video.volume === 0);
   const [volume, setVolume] = useState(Math.round((video.muted ? 0 : video.volume) * 100));
   const [visible, setVisible] = useState(true);
-  const [interacting, setInteracting] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<'main' | 'quality'>('main');
   const [volumeOpen, setVolumeOpen] = useState(false);
@@ -83,8 +82,8 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
 
   return (
     <div
-      onMouseEnter={() => { setInteracting(true); reveal(); }}
-      onMouseLeave={() => { setInteracting(false); if (!popoverOpen && !video.paused) setVisible(false); }}
+      onMouseEnter={reveal}
+      onMouseLeave={() => { if (!popoverOpen && !video.paused) setVisible(false); }}
       style={{ position: 'absolute', zIndex: 2, inset: 'auto 0 0', padding: '46px 12px 9px', background: 'linear-gradient(transparent,rgba(0,0,0,.9))', opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none', transition: 'opacity 200ms ease' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40 }}>
@@ -102,7 +101,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         <span style={{ flex: 1 }} />
         {resolution && <Badge aria-label={`Resolução atual: ${resolution}`}>{resolution}</Badge>}
         {adLimited && <Badge variant="warning" aria-label="Qualidade reduzida durante anúncio"><ShieldAlert size={15} />Anúncio</Badge>}
-        <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); if (!host.matches(':hover') && !video.paused) setVisible(false); } }}>
+        <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); if (!video.paused) setVisible(false); } }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
           </PopoverTrigger>
