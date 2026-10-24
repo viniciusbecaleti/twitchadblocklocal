@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, ShieldAlert, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
@@ -48,6 +48,8 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const [visible, setVisible] = useState(true);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<'main' | 'quality'>('main');
+  const popoverOpenRef = useRef(popoverOpen);
+  popoverOpenRef.current = popoverOpen;
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [, setClock] = useState(0);
   const qualities = options.getQualityOptions();
@@ -66,15 +68,20 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
 
   useEffect(() => {
     const show = () => setVisible(true);
-    const leave = () => { if (!popoverOpen && !video.paused) setVisible(false); };
-    host.addEventListener('mousemove', show);
-    host.addEventListener('mouseenter', show);
+    let idleTimer: number | undefined;
+    const clearIdleTimer = () => { if (idleTimer) window.clearTimeout(idleTimer); idleTimer = undefined; };
+    const hide = () => { if (!popoverOpenRef.current && !video.paused) setVisible(false); };
+    const restartIdleTimer = () => { clearIdleTimer(); if (!popoverOpenRef.current && !video.paused) idleTimer = window.setTimeout(hide, 3000); };
+    const reveal = () => { show(); restartIdleTimer(); };
+    const leave = () => { clearIdleTimer(); if (!popoverOpenRef.current && !video.paused) setVisible(false); };
+    host.addEventListener('mousemove', reveal);
+    host.addEventListener('mouseenter', reveal);
     host.addEventListener('mouseleave', leave);
-    video.addEventListener('play', show);
+    video.addEventListener('play', reveal);
     video.addEventListener('pause', show);
-    show();
-    return () => { host.removeEventListener('mousemove', show); host.removeEventListener('mouseenter', show); host.removeEventListener('mouseleave', leave); video.removeEventListener('play', show); video.removeEventListener('pause', show); };
-  }, [host, video, popoverOpen]);
+    reveal();
+    return () => { clearIdleTimer(); host.removeEventListener('mousemove', reveal); host.removeEventListener('mouseenter', reveal); host.removeEventListener('mouseleave', leave); video.removeEventListener('play', reveal); video.removeEventListener('pause', show); };
+  }, [host, video]);
 
   const reveal = () => { setVisible(true); setClock((value) => value + 1); };
   const setPlayerVolume = (next: number) => { video.volume = next / 100; video.muted = next === 0; options.onPersistVolume(); };
