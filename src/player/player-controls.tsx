@@ -50,6 +50,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const [settingsPage, setSettingsPage] = useState<'main' | 'quality'>('main');
   const popoverOpenRef = useRef(popoverOpen);
   popoverOpenRef.current = popoverOpen;
+  const [adPulse, setAdPulse] = useState(false);
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [, setClock] = useState(0);
   const qualities = options.getQualityOptions();
@@ -83,11 +84,18 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
     return () => { clearIdleTimer(); host.removeEventListener('mousemove', reveal); host.removeEventListener('mouseenter', reveal); host.removeEventListener('mouseleave', leave); video.removeEventListener('play', reveal); video.removeEventListener('pause', show); };
   }, [host, video]);
 
+  useEffect(() => {
+    if (!adActive) { setAdPulse(false); return; }
+    const timer = window.setInterval(() => setAdPulse((value) => !value), 900);
+    return () => window.clearInterval(timer);
+  }, [adActive]);
+
   const reveal = () => { setVisible(true); setClock((value) => value + 1); };
   const setPlayerVolume = (next: number) => { video.volume = next / 100; video.muted = next === 0; options.onPersistVolume(); };
   const fullscreen = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void host.requestFullscreen().catch(() => undefined); };
 
-  return (
+  return (<>
+    {adActive && <div aria-live="polite" style={{ position: 'absolute', zIndex: 5, top: 14, right: 16, display: 'flex', alignItems: 'center', gap: 7, color: '#ffd086', font: '600 14px Roboto,Arial,sans-serif', letterSpacing: '.1px', opacity: adPulse ? .48 : .92, pointerEvents: 'none', textShadow: '0 1px 4px rgba(0,0,0,.9)', transition: 'opacity 900ms ease-in-out' }}><ShieldAlert size={18} />Anúncio em andamento</div>}
     <div
       onMouseEnter={reveal}
       onMouseLeave={() => { if (!popoverOpen && !video.paused) setVisible(false); }}
@@ -107,7 +115,6 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         </div>
         <span style={{ flex: 1 }} />
         {resolution && <Badge aria-label={`Resolução atual: ${resolution}`}>{resolution}</Badge>}
-        {adActive && <Badge variant="warning" aria-label="Anúncio em andamento"><ShieldAlert size={15} />Anúncio</Badge>}
         <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); if (!video.paused) setVisible(false); } }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
@@ -134,7 +141,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         <IconButton title="Tela cheia" onClick={fullscreen}><Fullscreen size={24} /></IconButton>
       </div>
     </div>
-  );
+  </>);
 }
 
 export function mountPlayerControls(element: HTMLElement, options: PlayerControlsOptions): PlayerControls {
