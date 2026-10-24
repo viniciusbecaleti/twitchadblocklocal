@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, ShieldAlert, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
@@ -17,7 +17,6 @@ export type PlayerControlsOptions = {
   getQuality: () => number;
   getLowLatency: () => boolean;
   getResolutionLabel: () => string | null;
-  isAdActive: () => boolean;
   onQualityChange: (quality: number) => void;
   onLowLatencyChange: () => void;
   onPersistVolume: () => void;
@@ -50,7 +49,6 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const [settingsPage, setSettingsPage] = useState<'main' | 'quality'>('main');
   const popoverOpenRef = useRef(popoverOpen);
   popoverOpenRef.current = popoverOpen;
-  const [adPulse, setAdPulse] = useState(false);
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [, setClock] = useState(0);
   const qualities = options.getQualityOptions();
@@ -59,7 +57,6 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const qualityListHeight = Math.min(360, Math.max(56, (qualityChoices.length + 1) * 54 + 2));
   const lowLatency = options.getLowLatency();
   const resolution = options.getResolutionLabel();
-  const adActive = options.isAdActive();
 
   useEffect(() => {
     const update = () => { setPlaying(!video.paused); setMuted(video.muted || video.volume === 0); setVolume(Math.round((video.muted ? 0 : video.volume) * 100)); };
@@ -90,18 +87,11 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
     return () => { clearIdleTimer(); host.removeEventListener('mousemove', reveal); host.removeEventListener('mouseenter', reveal); host.removeEventListener('mouseleave', leave); video.removeEventListener('play', reveal); video.removeEventListener('pause', show); };
   }, [host, video]);
 
-  useEffect(() => {
-    if (!adActive) { setAdPulse(false); return; }
-    const timer = window.setInterval(() => setAdPulse((value) => !value), 900);
-    return () => window.clearInterval(timer);
-  }, [adActive]);
-
   const reveal = () => { setVisible(true); setClock((value) => value + 1); };
   const setPlayerVolume = (next: number) => { video.volume = next / 100; video.muted = next === 0; options.onPersistVolume(); };
   const fullscreen = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void host.requestFullscreen().catch(() => undefined); };
 
-  return (<>
-    {adActive && <div aria-live="polite" style={{ position: 'absolute', zIndex: 5, top: 14, right: 16, display: 'flex', alignItems: 'center', gap: 7, color: '#ffd086', font: '600 14px Roboto,Arial,sans-serif', letterSpacing: '.1px', opacity: adPulse ? .48 : .92, pointerEvents: 'none', textShadow: '0 1px 4px rgba(0,0,0,.9)', transition: 'opacity 900ms ease-in-out' }}><ShieldAlert size={18} />Anúncio em andamento</div>}
+  return (
     <div
       onMouseEnter={reveal}
       onMouseLeave={() => { if (!popoverOpen && !video.paused) setVisible(false); }}
@@ -147,7 +137,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         <IconButton title="Tela cheia" onClick={fullscreen}><Fullscreen size={24} /></IconButton>
       </div>
     </div>
-  </>);
+  );
 }
 
 export function mountPlayerControls(element: HTMLElement, options: PlayerControlsOptions): PlayerControls {
