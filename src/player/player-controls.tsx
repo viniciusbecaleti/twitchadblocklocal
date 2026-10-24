@@ -23,13 +23,13 @@ export type PlayerControlsOptions = {
 
 export type PlayerControls = { refresh: () => void; destroy: () => void };
 
-const iconButton: CSSProperties = { display: 'grid', placeItems: 'center', width: 50, height: 50, border: '1px solid rgba(255,255,255,.08)', borderRadius: 999, padding: 6, background: 'rgba(14,12,15,.58)', color: '#fff', cursor: 'pointer', boxShadow: '0 3px 12px rgba(0,0,0,.22)', transition: 'background 150ms ease,box-shadow 150ms ease,transform 150ms ease' };
+const iconButton: CSSProperties = { display: 'grid', placeItems: 'center', width: 40, height: 40, border: '1px solid rgba(255,255,255,.08)', borderRadius: 999, padding: 6, background: 'rgba(14,12,15,.58)', color: '#fff', cursor: 'pointer', boxShadow: '0 3px 12px rgba(0,0,0,.22)', transition: 'background 150ms ease,box-shadow 150ms ease,transform 150ms ease' };
 
 type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'title'> & { title: string; children: ReactNode; bare?: boolean };
 
 const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({ title, children, onMouseEnter, onMouseLeave, style, bare = false, ...props }, ref): ReactElement {
   const [hovered, setHovered] = useState(false);
-  return <button ref={ref} type="button" title={title} aria-label={title} {...props} onMouseEnter={(event) => { setHovered(true); onMouseEnter?.(event); }} onMouseLeave={(event) => { setHovered(false); onMouseLeave?.(event); }} style={{ ...iconButton, ...(bare ? { width: 50, height: 50, border: 0, background: 'transparent', boxShadow: 'none' } : {}), background: hovered ? (bare ? 'rgba(255,255,255,.08)' : 'rgba(63,58,60,.78)') : (bare ? 'transparent' : 'rgba(14,12,15,.58)'), boxShadow: hovered && !bare ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : undefined, ...style }}>{children}</button>;
+  return <button ref={ref} type="button" title={title} aria-label={title} {...props} onMouseEnter={(event) => { setHovered(true); onMouseEnter?.(event); }} onMouseLeave={(event) => { setHovered(false); onMouseLeave?.(event); }} style={{ ...iconButton, ...(bare ? { width: 40, height: 40, border: 0, background: 'transparent', boxShadow: 'none' } : {}), background: hovered ? (bare ? 'rgba(255,255,255,.08)' : 'rgba(63,58,60,.78)') : (bare ? 'transparent' : 'rgba(14,12,15,.58)'), boxShadow: hovered && !bare ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : undefined, ...style }}>{children}</button>;
 });
 
 function PlayerControlsView({ options, revision }: { options: PlayerControlsOptions; revision: number }): React.ReactElement {
@@ -76,7 +76,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
       onMouseLeave={() => { setInteracting(false); }}
       style={{ position: 'absolute', zIndex: 2, inset: 'auto 0 0', padding: '46px 12px 9px', background: 'linear-gradient(transparent,rgba(0,0,0,.9))', opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none', transition: visible ? 'opacity 0ms' : 'opacity 1000ms ease' }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40 }}>
         <IconButton title={playing ? 'Pausar' : 'Reproduzir'} onClick={() => { void (video.paused ? video.play() : video.pause()); }}>
           {playing ? <Pause size={27} fill="currentColor" /> : <Play size={27} fill="currentColor" />}
         </IconButton>
