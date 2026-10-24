@@ -32,7 +32,7 @@ type MenuButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { children: Rea
 
 const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({ title, children, onMouseEnter, onMouseLeave, style, bare = false, ...props }, ref): ReactElement {
   const [hovered, setHovered] = useState(false);
-  return <button ref={ref} type="button" title={title} aria-label={title} {...props} onMouseEnter={(event) => { setHovered(true); onMouseEnter?.(event); }} onMouseLeave={(event) => { setHovered(false); onMouseLeave?.(event); }} style={{ ...iconButton, ...(bare ? { width: 40, height: 40, border: 0, background: 'transparent', boxShadow: 'none' } : {}), background: hovered ? (bare ? 'rgba(255,255,255,.08)' : 'rgba(63,58,60,.78)') : (bare ? 'transparent' : 'rgba(14,12,15,.58)'), boxShadow: hovered && !bare ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : undefined, ...style }}>{children}</button>;
+  return <button ref={ref} type="button" title={title} aria-label={title} {...props} onMouseEnter={(event) => { setHovered(true); onMouseEnter?.(event); }} onMouseLeave={(event) => { setHovered(false); onMouseLeave?.(event); }} style={{ ...iconButton, ...(bare ? { width: 40, height: 40, border: 0, background: 'transparent', boxShadow: 'none' } : {}), background: bare ? 'transparent' : hovered ? 'rgba(63,58,60,.78)' : 'rgba(14,12,15,.58)', boxShadow: hovered && !bare ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : undefined, ...style }}>{children}</button>;
 });
 
 function MenuButton({ children, active = false, onMouseEnter, onMouseLeave, style, ...props }: MenuButtonProps): React.ReactElement {
