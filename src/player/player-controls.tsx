@@ -94,7 +94,8 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const setPlayerVolume = (next: number) => { video.volume = next / 100; video.muted = next === 0; options.onPersistVolume(); };
   const fullscreen = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void host.requestFullscreen().catch(() => undefined); };
 
-  return (
+  return (<>
+    {adLimited && <Badge variant="warning" aria-live="polite" aria-label="Aguardando o fim do anúncio" style={{ position: 'absolute', zIndex: 3, top: 14, right: 16, pointerEvents: 'none' }}><Spinner size={15} label="Aguardando o fim do anúncio" />Anúncio</Badge>}
     <div
       onMouseEnter={reveal}
       onMouseLeave={() => { if (!popoverOpen && !video.paused) setVisible(false); }}
@@ -114,7 +115,6 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         </div>
         <span style={{ flex: 1 }} />
         {resolution && <Badge aria-label={`Resolução atual: ${resolution}`}>{resolution}</Badge>}
-        {adLimited && <Badge variant="warning" aria-label="Aguardando o fim do anúncio"><Spinner size={15} label="Aguardando o fim do anúncio" />Anúncio</Badge>}
         <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); window.requestAnimationFrame(() => { if (!video.paused) setVisible(host.matches(':hover')); }); } }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
@@ -141,7 +141,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         <IconButton title="Tela cheia" onClick={fullscreen}><Fullscreen size={24} /></IconButton>
       </div>
     </div>
-  );
+  </>);
 }
 
 export function mountPlayerControls(element: HTMLElement, options: PlayerControlsOptions): PlayerControls {
