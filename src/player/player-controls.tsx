@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
+import { ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, ShieldAlert, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
@@ -14,6 +14,8 @@ export type PlayerControlsOptions = {
   getQualityOptions: () => QualityOption[];
   getQuality: () => number;
   getLowLatency: () => boolean;
+  getResolutionLabel: () => string | null;
+  isAdLimited: () => boolean;
   onQualityChange: (quality: number) => void;
   onLowLatencyChange: () => void;
   onPersistVolume: () => void;
@@ -41,6 +43,8 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const [, setClock] = useState(0);
   const qualities = options.getQualityOptions();
   const lowLatency = options.getLowLatency();
+  const resolution = options.getResolutionLabel();
+  const adLimited = options.isAdLimited();
 
   useEffect(() => {
     const update = () => { setPlaying(!video.paused); setMuted(video.muted || video.volume === 0); setVolume(Math.round((video.muted ? 0 : video.volume) * 100)); };
@@ -85,6 +89,8 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
           </div>
         </div>
         <span style={{ flex: 1 }} />
+        {resolution && <span aria-label={`Resolução atual: ${resolution}`} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,255,255,.13)', borderRadius: 999, background: 'rgba(14,12,15,.58)', color: '#fff', font: '600 13px Roboto,Arial,sans-serif', letterSpacing: '.1px' }}>{resolution}</span>}
+        {adLimited && <span aria-label="Qualidade reduzida durante anúncio" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,174,61,.32)', borderRadius: 999, background: 'rgba(89,50,14,.72)', color: '#ffd086', font: '600 13px Roboto,Arial,sans-serif' }}><ShieldAlert size={15} />Anúncio</span>}
         <Popover>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={22} /></IconButton>

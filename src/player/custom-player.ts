@@ -7,7 +7,7 @@ declare const __EXTENSION_VERSION__: string;
 const playerVersion = typeof __EXTENSION_VERSION__ === 'string' ? __EXTENSION_VERSION__ : 'development';
 
 type PlaybackToken = { channel: string; value: string; signature: string; force?: boolean; playerType?: string };
-type Active = { host: HTMLElement; video: HTMLVideoElement; original: HTMLVideoElement; wasMuted: boolean; volume: number; hls?: Hls; token: PlaybackToken; source: string; masterSource?: string; lowLatency: boolean; quality: number; masterProbe?: number; lastRecovery: number; cleanup?: () => void; applyAudioSettings?: () => void; considerToken?: (token: PlaybackToken) => void };
+type Active = { host: HTMLElement; video: HTMLVideoElement; original: HTMLVideoElement; wasMuted: boolean; volume: number; hls?: Hls; token: PlaybackToken; source: string; masterSource?: string; lowLatency: boolean; quality: number; currentHeight?: number; adLimited?: boolean; masterProbe?: number; lastRecovery: number; cleanup?: () => void; applyAudioSettings?: () => void; considerToken?: (token: PlaybackToken) => void };
 let active: Active | undefined;
 let preferredVolume = 1;
 let preferredMuted = false;
@@ -52,6 +52,8 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     getQualityOptions: () => Array.from(qualityMenu.options).map((option) => ({ value: Number(option.value), label: option.text })),
     getQuality: () => active?.quality ?? -1,
     getLowLatency: () => Boolean(active?.lowLatency),
+    getResolutionLabel: () => active?.currentHeight ? `${active.currentHeight}p` : null,
+    isAdLimited: () => Boolean(active?.adLimited),
     onQualityChange: (nextQuality) => { qualityMenu.value = String(nextQuality); qualityMenu.dispatchEvent(new Event('change')); },
     onLowLatencyChange: () => latency.click(),
     onPersistVolume: () => persistVolume(video)
@@ -171,6 +173,9 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       active.masterSource = candidate.masterSource ?? candidate.source;
       verifiedMediaHeight = candidate.source !== active.masterSource ? candidate.height : undefined;
       displayingLowFallback = candidate.adFree === true && candidate.height <= 360;
+      active.currentHeight = candidate.height;
+      active.adLimited = displayingLowFallback;
+      reactControls.refresh();
       if (displayingLowFallback) shieldAd(false);
       restoredQuality = true;
       attemptedMasterHeight = 0;
@@ -201,6 +206,12 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       const newlyBlocked = !adDetected;
       adDetected = true;
       cleanEdgeAvailable = false;
+      const currentHeight = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
+      if (active) {
+        active.currentHeight = currentHeight || active.currentHeight;
+        active.adLimited = currentHeight > 0 && currentHeight <= 360;
+      }
+      reactControls.refresh();
       if (displayingLowFallback) shieldAd(false); else shieldAd(true);
       recovery.ad(true);
       void recovery.tick();
@@ -253,13 +264,15 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       if (selectedHeight !== undefined) active.quality = hls.levels.findIndex((level) => (level.height || verifiedMediaHeight) === selectedHeight);
       hls.currentLevel = active.quality;
       qualityMenu.value = String(active.quality);
+      const currentMax = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
+      active.currentHeight = currentMax || active.currentHeight;
+      active.adLimited = displayingLowFallback || (adDetected && currentMax > 0 && currentMax <= 360);
       reactControls.refresh();
       if (wasRestored && active.quality === -1 && hls.levels.length) {
         const best = hls.levels.reduce((index, level, next) => level.height > hls.levels[index].height || (level.height === hls.levels[index].height && level.bitrate > hls.levels[index].bitrate) ? next : index, 0);
         hls.nextAutoLevel = best;
       }
       restoredQuality = false;
-      const currentMax = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
       recovery.qualities(currentMax);
       // Resolution alone is not evidence of an ad. A 360p-only live remains
       // visible while QualityRecovery checks for a higher-quality session.
@@ -291,6 +304,9 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
           active.masterSource = freshSource;
           verifiedMediaHeight = inspected.mediaSource ? inspected.height : undefined;
           displayingLowFallback = false;
+          active.currentHeight = inspected.height;
+          active.adLimited = false;
+          reactControls.refresh();
           restoredQuality = true;
           attemptedMasterHeight = inspected.height;
           masterUpgradePending = true;
