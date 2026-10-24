@@ -27,11 +27,17 @@ export type PlayerControls = { refresh: () => void; destroy: () => void };
 const iconButton: CSSProperties = { display: 'grid', placeItems: 'center', width: 40, height: 40, border: '1px solid rgba(255,255,255,.08)', borderRadius: 999, padding: 6, background: 'rgba(14,12,15,.58)', color: '#fff', cursor: 'pointer', boxShadow: '0 3px 12px rgba(0,0,0,.22)', transition: 'background 150ms ease,box-shadow 150ms ease,transform 150ms ease' };
 
 type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'title'> & { title: string; children: ReactNode; bare?: boolean };
+type MenuButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode; active?: boolean };
 
 const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({ title, children, onMouseEnter, onMouseLeave, style, bare = false, ...props }, ref): ReactElement {
   const [hovered, setHovered] = useState(false);
   return <button ref={ref} type="button" title={title} aria-label={title} {...props} onMouseEnter={(event) => { setHovered(true); onMouseEnter?.(event); }} onMouseLeave={(event) => { setHovered(false); onMouseLeave?.(event); }} style={{ ...iconButton, ...(bare ? { width: 40, height: 40, border: 0, background: 'transparent', boxShadow: 'none' } : {}), background: hovered ? (bare ? 'rgba(255,255,255,.08)' : 'rgba(63,58,60,.78)') : (bare ? 'transparent' : 'rgba(14,12,15,.58)'), boxShadow: hovered && !bare ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : undefined, ...style }}>{children}</button>;
 });
+
+function MenuButton({ children, active = false, onMouseEnter, onMouseLeave, style, ...props }: MenuButtonProps): React.ReactElement {
+  const [hovered, setHovered] = useState(false);
+  return <button type="button" {...props} onMouseEnter={(event) => { setHovered(true); onMouseEnter?.(event); }} onMouseLeave={(event) => { setHovered(false); onMouseLeave?.(event); }} style={{ border: 0, borderRadius: 14, background: hovered || active ? 'rgba(255,255,255,.12)' : 'transparent', color: '#fff', cursor: 'pointer', transition: 'background 150ms ease', ...style }}>{children}</button>;
+}
 
 function PlayerControlsView({ options, revision }: { options: PlayerControlsOptions; revision: number }): React.ReactElement {
   const { video, host } = options;
@@ -100,17 +106,17 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
           </PopoverTrigger>
           <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 360, padding: 8, border: '1px solid rgba(255,255,255,.10)', borderRadius: 20, background: 'rgba(20,20,22,.86)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', backdropFilter: 'blur(20px)', color: '#fff', font: '16px Roboto,Arial,sans-serif', overflow: 'hidden' }}>
             {settingsPage === 'main' ? <>
-              <button type="button" onClick={() => setSettingsPage('quality')} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 58, gap: 14, padding: '0 12px', border: 0, borderRadius: 14, background: 'transparent', color: '#fff', cursor: 'pointer', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>
+              <MenuButton onClick={() => setSettingsPage('quality')} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 58, gap: 14, padding: '0 12px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>
                 <SlidersHorizontal size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Qualidade</span><span style={{ maxWidth: 150, overflow: 'hidden', color: '#d4ceda', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedQuality?.label ?? 'Automática'}</span><ChevronRight size={20} color="#d4ceda" />
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', minHeight: 58, gap: 14, padding: '0 12px' }}>
-                <Gauge size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Baixa latência</span><Switch checked={lowLatency} aria-label="Baixa latência" onCheckedChange={options.onLowLatencyChange} />
-              </div>
+              </MenuButton>
+              <MenuButton aria-label="Alternar baixa latência" aria-pressed={lowLatency} onClick={options.onLowLatencyChange} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 58, gap: 14, padding: '0 12px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>
+                <Gauge size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Baixa latência</span><Switch checked={lowLatency} aria-label="Baixa latência" onClick={(event) => event.stopPropagation()} onCheckedChange={options.onLowLatencyChange} />
+              </MenuButton>
             </> : <>
               <button type="button" onClick={() => setSettingsPage('main')} style={{ display: 'flex', alignItems: 'center', width: 'calc(100% + 16px)', minHeight: 104, gap: 20, margin: '-8px -8px 0', padding: '0 32px', border: 0, borderBottom: '1px solid rgba(255,255,255,.24)', borderRadius: '20px 20px 0 0', background: 'transparent', color: '#fff', cursor: 'pointer', font: '600 22px Roboto,Arial,sans-serif', textAlign: 'left' }}><ChevronLeft size={30} strokeWidth={2.6} />Qualidade</button>
               <div style={{ maxHeight: 360, overflowY: 'auto', padding: '2px 0' }}>
-                {qualityChoices.map((quality) => <button key={quality.value} type="button" onClick={() => { options.onQualityChange(quality.value); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', border: 0, borderRadius: 14, background: quality.value === options.getQuality() ? 'rgba(255,255,255,.12)' : 'transparent', color: '#fff', cursor: 'pointer', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{quality.value === options.getQuality() ? <Check size={22} /> : <span style={{ width: 22 }} />}{quality.label}</button>)}
-                <button type="button" onClick={() => { options.onQualityChange(-1); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', border: 0, borderRadius: 14, background: options.getQuality() === -1 ? 'rgba(255,255,255,.12)' : 'transparent', color: '#fff', cursor: 'pointer', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{options.getQuality() === -1 ? <Check size={22} /> : <span style={{ width: 22 }} />}Automática</button>
+                {qualityChoices.map((quality) => <MenuButton key={quality.value} active={quality.value === options.getQuality()} onClick={() => { options.onQualityChange(quality.value); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{quality.value === options.getQuality() ? <Check size={22} /> : <span style={{ width: 22 }} />}{quality.label}</MenuButton>)}
+                <MenuButton active={options.getQuality() === -1} onClick={() => { options.onQualityChange(-1); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{options.getQuality() === -1 ? <Check size={22} /> : <span style={{ width: 22 }} />}Automática</MenuButton>
               </div>
             </>}
           </PopoverContent>
