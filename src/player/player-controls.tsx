@@ -68,6 +68,12 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   }, [video]);
 
   useEffect(() => {
+    const previousCursor = host.style.cursor;
+    host.style.cursor = visible ? '' : 'none';
+    return () => { host.style.cursor = previousCursor; };
+  }, [host, visible]);
+
+  useEffect(() => {
     const show = () => setVisible(true);
     let idleTimer: number | undefined;
     const clearIdleTimer = () => { if (idleTimer) window.clearTimeout(idleTimer); idleTimer = undefined; };
