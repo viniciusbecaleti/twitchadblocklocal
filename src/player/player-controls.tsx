@@ -95,7 +95,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const fullscreen = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void host.requestFullscreen().catch(() => undefined); };
 
   return (<>
-    {adLimited && <Badge variant="warning" aria-live="polite" aria-label="Aguardando o fim do anúncio" style={{ position: 'absolute', zIndex: 3, top: 14, right: 16, pointerEvents: 'none' }}><Spinner size={15} label="Aguardando o fim do anúncio" />Anúncio</Badge>}
+    {adLimited && <Badge variant="warning" aria-label="Aguardando o fim do anúncio" style={{ position: 'absolute', zIndex: 3, top: 14, right: 16, pointerEvents: 'none' }}><Spinner size={15} label="Aguardando o fim do anúncio" />Anúncio</Badge>}
     <div
       onMouseEnter={reveal}
       onMouseLeave={() => { if (!popoverOpen && !video.paused) setVisible(false); }}

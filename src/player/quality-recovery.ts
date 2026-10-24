@@ -114,7 +114,7 @@ export class QualityRecovery {
     try {
       const candidate = await this.probe();
       if (this.disposed) return;
-      if (candidate && candidate.adFree === true && candidate.height > 0 && (candidate.height > this.height || this.adActive)) {
+      if (candidate && candidate.adFree === true && candidate.height > 0 && (!this.adActive || candidate.height <= 360) && (candidate.height > this.height || this.adActive)) {
         this.upgrade(candidate);
         this.adActive = false;
         this.qualities(candidate.height);

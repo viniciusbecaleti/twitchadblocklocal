@@ -66,6 +66,16 @@ describe('ad recovery at the live edge', () => {
     expect(upgrade).toHaveBeenCalledExactlyOnceWith(candidate(360));
   });
 
+  it('does not switch back to HD while an ad is still active', async () => {
+    const probe = vi.fn().mockResolvedValue(candidate(1080));
+    const upgrade = vi.fn();
+    const recovery = new QualityRecovery(probe, upgrade);
+    recovery.qualities(360);
+    recovery.ad(true);
+    await recovery.tick();
+    expect(upgrade).not.toHaveBeenCalled();
+  });
+
   it('also detects an ad on a 1080p stream, without repeated requests per segment', async () => {
     const probe = vi.fn().mockResolvedValue({ ...candidate(1080), adFree: false });
     const upgrade = vi.fn();

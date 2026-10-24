@@ -160,6 +160,10 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     });
     const applyCandidate = (candidate: QualityCandidate) => {
       if (!active || active.hls !== hls || masterUpgradePending) return;
+      // While an ad marker is still active, retain only the verified low
+      // fallback. Native player events can advertise HD before the stitched
+      // break ends, which otherwise makes the player oscillate 360p → HD.
+      if (adDetected && !cleanEdgeAvailable && candidate.height > 360) return;
       const currentHeight = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
       // Once the clean 360p mini-player session is running, fresh native
       // tokens for the same/lower quality are only renewals. Reloading them
@@ -281,7 +285,9 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     hls.loadSource(source); hls.attachMedia(video);
     const checkMaster = async () => {
       if (!active || active.hls !== hls || document.hidden) return;
-      // Mid-roll recovery must continue even if this master already has HD.
+      // Recovery may look for a clean low fallback during the break, but HD
+      // upgrades wait for the ad-ended transition.
+      if (adDetected && !cleanEdgeAvailable) { void recovery.tick(); return; }
       void recovery.tick();
       if (masterUpgradePending || masterProbeInFlight) return;
       const currentMax = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
@@ -332,6 +338,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     let lastNativeTransition = 0;
     const nativeTransition = () => {
       if (!active || active.hls !== hls || Date.now() - lastNativeTransition < 1500) return;
+      if (adDetected && !cleanEdgeAvailable) return;
       const currentMax = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
       if (currentMax >= 1080) return;
       lastNativeTransition = Date.now();
