@@ -39,6 +39,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const [volume, setVolume] = useState(Math.round((video.muted ? 0 : video.volume) * 100));
   const [visible, setVisible] = useState(true);
   const [interacting, setInteracting] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [, setClock] = useState(0);
   const qualities = options.getQualityOptions();
@@ -53,18 +54,16 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   }, [video]);
 
   useEffect(() => {
-    let timer: number | undefined;
-    const hide = () => { if (!interacting && !video.paused) setVisible(false); };
-    const show = () => { if (timer) clearTimeout(timer); setVisible(true); if (!interacting && !video.paused) timer = window.setTimeout(hide, 2000); };
-    const leave = () => { setInteracting(false); if (timer) clearTimeout(timer); timer = window.setTimeout(hide, 2000); };
+    const show = () => setVisible(true);
+    const leave = () => { if (!popoverOpen && !video.paused) setVisible(false); };
     host.addEventListener('mousemove', show);
     host.addEventListener('mouseenter', show);
     host.addEventListener('mouseleave', leave);
     video.addEventListener('play', show);
     video.addEventListener('pause', show);
     show();
-    return () => { if (timer) clearTimeout(timer); host.removeEventListener('mousemove', show); host.removeEventListener('mouseenter', show); host.removeEventListener('mouseleave', leave); video.removeEventListener('play', show); video.removeEventListener('pause', show); };
-  }, [host, video, interacting]);
+    return () => { host.removeEventListener('mousemove', show); host.removeEventListener('mouseenter', show); host.removeEventListener('mouseleave', leave); video.removeEventListener('play', show); video.removeEventListener('pause', show); };
+  }, [host, video, popoverOpen]);
 
   const reveal = () => { setVisible(true); setClock((value) => value + 1); };
   const setPlayerVolume = (next: number) => { video.volume = next / 100; video.muted = next === 0; options.onPersistVolume(); };
@@ -73,8 +72,8 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   return (
     <div
       onMouseEnter={() => { setInteracting(true); reveal(); }}
-      onMouseLeave={() => { setInteracting(false); }}
-      style={{ position: 'absolute', zIndex: 2, inset: 'auto 0 0', padding: '46px 12px 9px', background: 'linear-gradient(transparent,rgba(0,0,0,.9))', opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none', transition: visible ? 'opacity 0ms' : 'opacity 1000ms ease' }}
+      onMouseLeave={() => { setInteracting(false); if (!popoverOpen && !video.paused) setVisible(false); }}
+      style={{ position: 'absolute', zIndex: 2, inset: 'auto 0 0', padding: '46px 12px 9px', background: 'linear-gradient(transparent,rgba(0,0,0,.9))', opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none', transition: 'opacity 200ms ease' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40 }}>
         <IconButton title={playing ? 'Pausar' : 'Reproduzir'} onClick={() => { void (video.paused ? video.play() : video.pause()); }}>
@@ -91,7 +90,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         <span style={{ flex: 1 }} />
         {resolution && <span aria-label={`Resolução atual: ${resolution}`} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,255,255,.13)', borderRadius: 999, background: 'rgba(14,12,15,.58)', color: '#fff', font: '600 13px Roboto,Arial,sans-serif', letterSpacing: '.1px' }}>{resolution}</span>}
         {adLimited && <span aria-label="Qualidade reduzida durante anúncio" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,174,61,.32)', borderRadius: 999, background: 'rgba(89,50,14,.72)', color: '#ffd086', font: '600 13px Roboto,Arial,sans-serif' }}><ShieldAlert size={15} />Anúncio</span>}
-        <Popover>
+        <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else if (!interacting && !video.paused) setVisible(false); }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
           </PopoverTrigger>
