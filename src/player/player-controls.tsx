@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, ShieldAlert, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, ShieldAlert, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
@@ -40,9 +40,12 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const [visible, setVisible] = useState(true);
   const [interacting, setInteracting] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [settingsPage, setSettingsPage] = useState<'main' | 'quality'>('main');
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [, setClock] = useState(0);
   const qualities = options.getQualityOptions();
+  const selectedQuality = qualities.find((quality) => quality.value === options.getQuality());
+  const qualityChoices = qualities.filter((quality) => quality.value >= 0).slice().sort((a, b) => Number.parseInt(b.label, 10) - Number.parseInt(a.label, 10));
   const lowLatency = options.getLowLatency();
   const resolution = options.getResolutionLabel();
   const adLimited = options.isAdLimited();
@@ -90,22 +93,25 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         <span style={{ flex: 1 }} />
         {resolution && <span aria-label={`Resolução atual: ${resolution}`} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,255,255,.13)', borderRadius: 999, background: 'rgba(14,12,15,.58)', color: '#fff', font: '600 13px Roboto,Arial,sans-serif', letterSpacing: '.1px' }}>{resolution}</span>}
         {adLimited && <span aria-label="Qualidade reduzida durante anúncio" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,174,61,.32)', borderRadius: 999, background: 'rgba(89,50,14,.72)', color: '#ffd086', font: '600 13px Roboto,Arial,sans-serif' }}><ShieldAlert size={15} />Anúncio</span>}
-        <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else if (!interacting && !video.paused) setVisible(false); }}>
+        <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); if (!interacting && !video.paused) setVisible(false); } }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
           </PopoverTrigger>
-          <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 390, padding: 16, border: '1px solid rgba(255,255,255,.08)', borderRadius: 24, background: 'rgba(31,26,23,.80)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', backdropFilter: 'blur(18px)', color: '#fff', font: '16px Roboto,Arial,sans-serif' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, minHeight: 64, padding: '0 14px', borderRadius: 14 }}>
-              <SlidersHorizontal size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Qualidade</span>
-              <select aria-label="Qualidade" value={options.getQuality()} onChange={(event) => options.onQualityChange(Number(event.target.value))} style={{ maxWidth: 180, border: 0, background: 'transparent', color: '#d4ceda', font: '16px Roboto,Arial,sans-serif', textAlign: 'right', cursor: 'pointer', outline: 'none' }}>
-                {qualities.map((quality) => <option key={quality.value} value={quality.value} style={{ background: '#17131b', color: '#fff' }}>{quality.label}</option>)}
-              </select>
-              <ChevronRight size={20} color="#d4ceda" />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, minHeight: 64, padding: '0 14px', borderRadius: 14 }}>
-              <Gauge size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Baixa latência</span>
-              <Switch checked={lowLatency} aria-label="Baixa latência" onCheckedChange={options.onLowLatencyChange} />
-            </div>
+          <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 360, padding: 8, border: '1px solid rgba(255,255,255,.10)', borderRadius: 20, background: 'rgba(20,20,22,.86)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', backdropFilter: 'blur(20px)', color: '#fff', font: '16px Roboto,Arial,sans-serif', overflow: 'hidden' }}>
+            {settingsPage === 'main' ? <>
+              <button type="button" onClick={() => setSettingsPage('quality')} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 58, gap: 14, padding: '0 12px', border: 0, borderRadius: 14, background: 'transparent', color: '#fff', cursor: 'pointer', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>
+                <SlidersHorizontal size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Qualidade</span><span style={{ maxWidth: 150, overflow: 'hidden', color: '#d4ceda', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedQuality?.label ?? 'Automática'}</span><ChevronRight size={20} color="#d4ceda" />
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', minHeight: 58, gap: 14, padding: '0 12px' }}>
+                <Gauge size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Baixa latência</span><Switch checked={lowLatency} aria-label="Baixa latência" onCheckedChange={options.onLowLatencyChange} />
+              </div>
+            </> : <>
+              <button type="button" onClick={() => setSettingsPage('main')} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 52, gap: 10, padding: '0 12px', border: 0, borderRadius: 14, background: 'transparent', color: '#fff', cursor: 'pointer', font: '600 16px Roboto,Arial,sans-serif', textAlign: 'left' }}><ChevronLeft size={24} />Qualidade</button>
+              <div style={{ maxHeight: 360, overflowY: 'auto', padding: '2px 0' }}>
+                {qualityChoices.map((quality) => <button key={quality.value} type="button" onClick={() => { options.onQualityChange(quality.value); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', border: 0, borderRadius: 14, background: quality.value === options.getQuality() ? 'rgba(255,255,255,.12)' : 'transparent', color: '#fff', cursor: 'pointer', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{quality.value === options.getQuality() ? <Check size={22} /> : <span style={{ width: 22 }} />}{quality.label}</button>)}
+                <button type="button" onClick={() => { options.onQualityChange(-1); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', border: 0, borderRadius: 14, background: options.getQuality() === -1 ? 'rgba(255,255,255,.12)' : 'transparent', color: '#fff', cursor: 'pointer', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{options.getQuality() === -1 ? <Check size={22} /> : <span style={{ width: 22 }} />}Automática</button>
+              </div>
+            </>}
           </PopoverContent>
         </Popover>
         <IconButton title="Tela cheia" onClick={fullscreen}><Fullscreen size={24} /></IconButton>
