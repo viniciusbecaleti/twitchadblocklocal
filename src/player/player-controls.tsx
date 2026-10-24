@@ -4,6 +4,7 @@ import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Setti
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
+import { Badge } from '../components/ui/badge';
 
 type QualityOption = { value: number; label: string };
 
@@ -91,8 +92,8 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
           </div>
         </div>
         <span style={{ flex: 1 }} />
-        {resolution && <span aria-label={`Resolução atual: ${resolution}`} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,255,255,.13)', borderRadius: 999, background: 'rgba(14,12,15,.58)', color: '#fff', font: '600 13px Roboto,Arial,sans-serif', letterSpacing: '.1px' }}>{resolution}</span>}
-        {adLimited && <span aria-label="Qualidade reduzida durante anúncio" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,174,61,.32)', borderRadius: 999, background: 'rgba(89,50,14,.72)', color: '#ffd086', font: '600 13px Roboto,Arial,sans-serif' }}><ShieldAlert size={15} />Anúncio</span>}
+        {resolution && <Badge aria-label={`Resolução atual: ${resolution}`}>{resolution}</Badge>}
+        {adLimited && <Badge variant="warning" aria-label="Qualidade reduzida durante anúncio"><ShieldAlert size={15} />Anúncio</Badge>}
         <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); if (!interacting && !video.paused) setVisible(false); } }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
