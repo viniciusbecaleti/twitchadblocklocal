@@ -114,7 +114,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
               </MenuButton>
             </> : <>
               <button type="button" onClick={() => setSettingsPage('main')} style={{ display: 'flex', alignItems: 'center', width: 'calc(100% + 16px)', minHeight: 76, gap: 16, margin: '-8px -8px 0', padding: '0 24px', border: 0, borderBottom: '1px solid rgba(255,255,255,.24)', borderRadius: '20px 20px 0 0', background: 'transparent', color: '#fff', cursor: 'pointer', font: '600 18px Roboto,Arial,sans-serif', textAlign: 'left' }}><ChevronLeft size={26} strokeWidth={2.6} />Qualidade</button>
-              <div style={{ maxHeight: 360, overflowY: 'auto', padding: '2px 0' }}>
+              <div style={{ maxHeight: 360, overflowY: 'auto', padding: '14px 0 2px' }}>
                 {qualityChoices.map((quality) => <MenuButton key={quality.value} active={quality.value === options.getQuality()} onClick={() => { options.onQualityChange(quality.value); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{quality.value === options.getQuality() ? <Check size={22} /> : <span style={{ width: 22 }} />}{quality.label}</MenuButton>)}
                 <MenuButton active={options.getQuality() === -1} onClick={() => { options.onQualityChange(-1); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{options.getQuality() === -1 ? <Check size={22} /> : <span style={{ width: 22 }} />}Automática</MenuButton>
               </div>
