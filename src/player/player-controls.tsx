@@ -78,11 +78,11 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40 }}>
         <IconButton title={playing ? 'Pausar' : 'Reproduzir'} onClick={() => { void (video.paused ? video.play() : video.pause()); }}>
-          {playing ? <Pause size={27} fill="currentColor" /> : <Play size={27} fill="currentColor" />}
+          {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
         </IconButton>
         <div onMouseEnter={() => { setVolumeOpen(true); reveal(); }} onMouseLeave={() => setVolumeOpen(false)} style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,.08)', borderRadius: 999, background: volumeOpen ? 'rgba(77,72,74,.66)' : 'rgba(14,12,15,.58)', boxShadow: volumeOpen ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : '0 3px 12px rgba(0,0,0,.22)', transition: 'background 180ms ease,box-shadow 180ms ease' }}>
           <IconButton bare title={muted ? 'Ativar som' : 'Silenciar'} onClick={() => { video.muted = !video.muted; options.onPersistVolume(); }}>
-            {muted ? <VolumeX size={27} /> : <Volume2 size={27} />}
+            {muted ? <VolumeX size={24} /> : <Volume2 size={24} />}
           </IconButton>
           <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', width: volumeOpen ? 88 : 0, opacity: volumeOpen ? 1 : 0, transition: 'width 180ms ease,opacity 140ms ease' }}>
             <Slider min={0} max={100} step={1} value={[volume]} onValueChange={([next]) => setPlayerVolume(next)} style={{ margin: '0 7px 0 2px' }} />
@@ -93,23 +93,23 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         {adLimited && <span aria-label="Qualidade reduzida durante anúncio" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 32, padding: '0 11px', border: '1px solid rgba(255,174,61,.32)', borderRadius: 999, background: 'rgba(89,50,14,.72)', color: '#ffd086', font: '600 13px Roboto,Arial,sans-serif' }}><ShieldAlert size={15} />Anúncio</span>}
         <Popover>
           <PopoverTrigger asChild>
-            <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={22} /></IconButton>
+            <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
           </PopoverTrigger>
           <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 390, padding: 16, border: '1px solid rgba(255,255,255,.08)', borderRadius: 24, background: 'rgba(31,26,23,.80)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', backdropFilter: 'blur(18px)', color: '#fff', font: '16px Roboto,Arial,sans-serif' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, minHeight: 64, padding: '0 14px', borderRadius: 14 }}>
-              <SlidersHorizontal size={27} strokeWidth={2.25} /><span style={{ flex: 1 }}>Qualidade</span>
+              <SlidersHorizontal size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Qualidade</span>
               <select aria-label="Qualidade" value={options.getQuality()} onChange={(event) => options.onQualityChange(Number(event.target.value))} style={{ maxWidth: 180, border: 0, background: 'transparent', color: '#d4ceda', font: '16px Roboto,Arial,sans-serif', textAlign: 'right', cursor: 'pointer', outline: 'none' }}>
                 {qualities.map((quality) => <option key={quality.value} value={quality.value} style={{ background: '#17131b', color: '#fff' }}>{quality.label}</option>)}
               </select>
               <ChevronRight size={20} color="#d4ceda" />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, minHeight: 64, padding: '0 14px', borderRadius: 14 }}>
-              <Gauge size={27} strokeWidth={2.25} /><span style={{ flex: 1 }}>Baixa latência</span>
+              <Gauge size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Baixa latência</span>
               <Switch checked={lowLatency} aria-label="Baixa latência" onCheckedChange={options.onLowLatencyChange} />
             </div>
           </PopoverContent>
         </Popover>
-        <IconButton title="Tela cheia" onClick={fullscreen}><Fullscreen size={22} /></IconButton>
+        <IconButton title="Tela cheia" onClick={fullscreen}><Fullscreen size={24} /></IconButton>
       </div>
     </div>
   );
