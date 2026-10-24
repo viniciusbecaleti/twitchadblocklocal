@@ -101,7 +101,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         <IconButton title={playing ? 'Pausar' : 'Reproduzir'} onClick={() => { void (video.paused ? video.play() : video.pause()); }}>
           {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
         </IconButton>
-        <div onMouseEnter={() => { setVolumeOpen(true); reveal(); }} onMouseLeave={() => setVolumeOpen(false)} style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,.08)', borderRadius: 999, background: volumeOpen ? 'rgba(77,72,74,.66)' : 'rgba(14,12,15,.58)', boxShadow: volumeOpen ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : '0 3px 12px rgba(0,0,0,.22)', transition: 'background 180ms ease,box-shadow 180ms ease' }}>
+        <div onMouseEnter={() => { setVolumeOpen(true); reveal(); }} onMouseLeave={() => setVolumeOpen(false)} style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,.08)', borderRadius: 999, background: volumeOpen ? 'rgba(77,72,74,.66)' : 'rgba(14,12,15,.58)', boxShadow: volumeOpen ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : '0 3px 12px rgba(0,0,0,.22)', cursor: 'pointer', transition: 'background 180ms ease,box-shadow 180ms ease' }}>
           <IconButton bare title={muted ? 'Ativar som' : 'Silenciar'} onClick={() => { video.muted = !video.muted; options.onPersistVolume(); }}>
             {muted ? <VolumeX size={24} /> : <Volume2 size={24} />}
           </IconButton>
