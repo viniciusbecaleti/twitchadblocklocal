@@ -100,7 +100,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         <span style={{ flex: 1 }} />
         {resolution && <Badge aria-label={`Resolução atual: ${resolution}`}>{resolution}</Badge>}
         {adLimited && <Badge variant="warning" aria-label="Qualidade reduzida durante anúncio"><ShieldAlert size={15} />Anúncio</Badge>}
-        <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); if (!interacting && !video.paused) setVisible(false); } }}>
+        <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); if (!host.matches(':hover') && !video.paused) setVisible(false); } }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
           </PopoverTrigger>
