@@ -1,11 +1,12 @@
 import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, ShieldAlert, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
 import { Badge } from '../components/ui/badge';
 import { ScrollArea } from '../components/ui/scroll-area';
+import { Spinner } from '../components/ui/spinner';
 
 type QualityOption = { value: number; label: string };
 
@@ -113,7 +114,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         </div>
         <span style={{ flex: 1 }} />
         {resolution && <Badge aria-label={`Resolução atual: ${resolution}`}>{resolution}</Badge>}
-        {adLimited && <Badge variant="warning" aria-label="Qualidade reduzida durante anúncio"><ShieldAlert size={15} />Anúncio</Badge>}
+        {adLimited && <Badge variant="warning" aria-label="Aguardando o fim do anúncio"><Spinner size={15} label="Aguardando o fim do anúncio" />Anúncio</Badge>}
         <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); window.requestAnimationFrame(() => { if (!video.paused) setVisible(host.matches(':hover')); }); } }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
