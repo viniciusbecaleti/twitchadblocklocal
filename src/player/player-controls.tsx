@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
 import { Badge } from '../components/ui/badge';
+import { ScrollArea } from '../components/ui/scroll-area';
 
 type QualityOption = { value: number; label: string };
 
@@ -53,6 +54,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const qualities = options.getQualityOptions();
   const selectedQuality = qualities.find((quality) => quality.value === options.getQuality());
   const qualityChoices = qualities.filter((quality) => quality.value >= 0).slice().sort((a, b) => Number.parseInt(b.label, 10) - Number.parseInt(a.label, 10));
+  const qualityListHeight = Math.min(360, Math.max(56, (qualityChoices.length + 1) * 54 + 2));
   const lowLatency = options.getLowLatency();
   const resolution = options.getResolutionLabel();
   const adLimited = options.isAdLimited();
@@ -104,7 +106,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
           </PopoverTrigger>
-          <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 360, padding: 8, border: '1px solid rgba(0,0,0,.68)', borderRadius: 20, background: 'rgba(0,0,0,.68)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', color: '#fff', font: '16px Roboto,Arial,sans-serif', overflow: 'hidden' }}>
+          <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 360, maxHeight: 'calc(100vh - 40px)', padding: 8, border: '1px solid rgba(0,0,0,.68)', borderRadius: 20, background: 'rgba(0,0,0,.68)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', color: '#fff', font: '16px Roboto,Arial,sans-serif', overflow: 'hidden' }}>
             {settingsPage === 'main' ? <>
               <MenuButton onClick={() => setSettingsPage('quality')} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 58, gap: 14, padding: '0 12px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>
                 <SlidersHorizontal size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Qualidade</span><span style={{ maxWidth: 150, overflow: 'hidden', color: '#d4ceda', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedQuality?.label ?? 'Automática'}</span><ChevronRight size={20} color="#d4ceda" />
@@ -114,10 +116,12 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
               </MenuButton>
             </> : <>
               <button type="button" onClick={() => setSettingsPage('main')} style={{ display: 'flex', alignItems: 'center', width: 'calc(100% + 16px)', minHeight: 76, gap: 16, margin: '-8px -8px 0', padding: '0 24px', border: 0, borderBottom: '1px solid rgba(255,255,255,.24)', borderRadius: '20px 20px 0 0', background: 'transparent', color: '#fff', cursor: 'pointer', font: '600 18px Roboto,Arial,sans-serif', textAlign: 'left' }}><ChevronLeft size={26} strokeWidth={2.6} />Qualidade</button>
-              <div style={{ maxHeight: 360, overflowY: 'auto', padding: '14px 0 2px' }}>
+              <ScrollArea style={{ height: `min(${qualityListHeight}px, calc(100vh - 132px))`, marginTop: 14 }}>
+                <div style={{ padding: '0 0 2px' }}>
                 {qualityChoices.map((quality) => <MenuButton key={quality.value} active={quality.value === options.getQuality()} onClick={() => { options.onQualityChange(quality.value); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{quality.value === options.getQuality() ? <Check size={22} /> : <span style={{ width: 22 }} />}{quality.label}</MenuButton>)}
                 <MenuButton active={options.getQuality() === -1} onClick={() => { options.onQualityChange(-1); setSettingsPage('main'); }} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 54, gap: 12, padding: '0 16px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>{options.getQuality() === -1 ? <Check size={22} /> : <span style={{ width: 22 }} />}Automática</MenuButton>
-              </div>
+                </div>
+              </ScrollArea>
             </>}
           </PopoverContent>
         </Popover>
