@@ -104,7 +104,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
           </PopoverTrigger>
-          <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 360, padding: 8, border: '1px solid rgba(255,255,255,.10)', borderRadius: 20, background: 'rgba(14,12,15,.58)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', backdropFilter: 'blur(20px)', color: '#fff', font: '16px Roboto,Arial,sans-serif', overflow: 'hidden' }}>
+          <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 360, padding: 8, border: '1px solid rgba(0,0,0,.68)', borderRadius: 20, background: 'rgba(0,0,0,.68)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', color: '#fff', font: '16px Roboto,Arial,sans-serif', overflow: 'hidden' }}>
             {settingsPage === 'main' ? <>
               <MenuButton onClick={() => setSettingsPage('quality')} style={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 58, gap: 14, padding: '0 12px', font: '16px Roboto,Arial,sans-serif', textAlign: 'left' }}>
                 <SlidersHorizontal size={24} strokeWidth={2.25} /><span style={{ flex: 1 }}>Qualidade</span><span style={{ maxWidth: 150, overflow: 'hidden', color: '#d4ceda', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedQuality?.label ?? 'Automática'}</span><ChevronRight size={20} color="#d4ceda" />
