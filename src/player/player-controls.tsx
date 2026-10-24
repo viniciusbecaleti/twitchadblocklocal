@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, ShieldAlert, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
@@ -17,6 +17,7 @@ export type PlayerControlsOptions = {
   getQuality: () => number;
   getLowLatency: () => boolean;
   getResolutionLabel: () => string | null;
+  isAdLimited: () => boolean;
   onQualityChange: (quality: number) => void;
   onLowLatencyChange: () => void;
   onPersistVolume: () => void;
@@ -57,6 +58,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
   const qualityListHeight = Math.min(360, Math.max(56, (qualityChoices.length + 1) * 54 + 2));
   const lowLatency = options.getLowLatency();
   const resolution = options.getResolutionLabel();
+  const adLimited = options.isAdLimited();
 
   useEffect(() => {
     const update = () => { setPlaying(!video.paused); setMuted(video.muted || video.volume === 0); setVolume(Math.round((video.muted ? 0 : video.volume) * 100)); };
@@ -111,6 +113,7 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
         </div>
         <span style={{ flex: 1 }} />
         {resolution && <Badge aria-label={`Resolução atual: ${resolution}`}>{resolution}</Badge>}
+        {adLimited && <Badge variant="warning" aria-label="Qualidade reduzida durante anúncio"><ShieldAlert size={15} />Anúncio</Badge>}
         <Popover open={popoverOpen} onOpenChange={(open) => { setPopoverOpen(open); if (open) reveal(); else { setSettingsPage('main'); window.requestAnimationFrame(() => { if (!video.paused) setVisible(host.matches(':hover')); }); } }}>
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={24} /></IconButton>
