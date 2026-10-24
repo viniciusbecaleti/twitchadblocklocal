@@ -1,6 +1,7 @@
 import Hls, { type Fragment } from 'hls.js';
 import { adAtLiveEdge, fragmentLooksLikeAd, inspectCandidateManifest, maxHeight, QualityRecovery, type QualityCandidate } from './quality-recovery';
 import { fetchPlaylistText, PlaylistRequestError } from './playlist-request';
+import { mountPlayerControls } from './player-controls';
 
 declare const __EXTENSION_VERSION__: string;
 const playerVersion = typeof __EXTENSION_VERSION__ === 'string' ? __EXTENSION_VERSION__ : 'development';
@@ -38,9 +39,24 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
   const play = btn(svg(icons.play), 'Reproduzir'); const mute = btn(svg(icons.volume), 'Silenciar'); const volumeBox = document.createElement('div'); volumeBox.style.cssText = 'display:flex;align-items:center;overflow:hidden;width:0;opacity:0;transition:width 180ms ease,opacity 140ms ease'; const volumeSlider = document.createElement('input'); volumeSlider.type = 'range'; volumeSlider.min = '0'; volumeSlider.max = '100'; volumeSlider.value = '100'; volumeSlider.setAttribute('aria-label', 'Volume'); volumeSlider.style.cssText = 'width:76px;margin:0 7px 0 2px;accent-color:#fff;cursor:pointer'; volumeBox.append(volumeSlider); const volumeGroup = document.createElement('div'); volumeGroup.style.cssText = 'display:flex;align-items:center;border-radius:18px;transition:background 180ms ease'; volumeGroup.append(mute, volumeBox); const spacer = document.createElement('span'); spacer.style.flex = '1'; const qualityMenu = document.createElement('select'); qualityMenu.title = 'Qualidade'; qualityMenu.style.cssText = 'background:transparent;border:0;color:#ddd;font:13px Roboto,Arial,sans-serif;padding:4px;text-align:right;cursor:pointer'; qualityMenu.append(new Option('Automática', '-1')); const latency = document.createElement('button'); latency.title = 'Alternar baixa latência'; latency.setAttribute('aria-label', 'Baixa latência'); latency.setAttribute('role', 'switch'); latency.style.cssText = 'position:relative;width:38px;height:22px;border:0;border-radius:999px;background:#5f6368;cursor:pointer;padding:0;transition:background 160ms ease'; const latencyKnob = document.createElement('span'); latencyKnob.style.cssText = 'position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.45);transition:transform 160ms ease'; latency.append(latencyKnob); const settings = btn(svg(icons.gear), 'Configurações'); const fullscreen = btn(svg(icons.fullscreen), 'Tela cheia');
   settings.title = `Configurações · v${playerVersion}`;
   const settingsPanel = document.createElement('div'); settingsPanel.style.cssText = 'display:none;position:absolute;right:12px;bottom:56px;width:285px;padding:8px;background:rgba(15,15,15,.96);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.48);backdrop-filter:blur(12px);z-index:2'; const settingsRow = (label: string, detail: HTMLElement) => { const item = document.createElement('div'); item.style.cssText = 'display:flex;align-items:center;justify-content:space-between;min-height:42px;padding:0 9px;border-radius:7px'; const text = document.createElement('span'); text.textContent = label; text.style.cssText = 'font:14px Roboto,Arial,sans-serif'; item.append(text, detail); item.onmouseenter = () => item.style.background = 'rgba(255,255,255,.08)'; item.onmouseleave = () => item.style.background = 'transparent'; return item; }; settingsPanel.append(settingsRow('Qualidade', qualityMenu), settingsRow('Baixa latência', latency));
-  row.append(play, volumeGroup, spacer, settings, fullscreen); controls.append(row); host.append(video, adShield, controls, settingsPanel);
+  row.append(play, volumeGroup, spacer, settings, fullscreen); controls.append(row);
+  // The original DOM controls stay mounted only as an adapter for the stable
+  // playback logic below. The visible interface is rendered by React.
+  controls.style.display = 'none'; settingsPanel.style.display = 'none';
+  const reactMount = document.createElement('div'); reactMount.style.cssText = 'position:absolute;inset:0;z-index:2;pointer-events:none';
+  host.append(video, adShield, controls, settingsPanel, reactMount);
   const cleanup: Array<() => void> = [];
   const wasMuted = original.muted; const volume = original.volume; if (getComputedStyle(container).position === 'static') container.style.position = 'relative'; container.append(host); original.muted = true; original.volume = 0; active = { host, video, original, wasMuted, volume, token, source, lowLatency, quality, lastRecovery: 0, cleanup: () => cleanup.forEach((stop) => stop()) };
+  const reactControls = mountPlayerControls(reactMount, {
+    video, host, version: playerVersion,
+    getQualityOptions: () => Array.from(qualityMenu.options).map((option) => ({ value: Number(option.value), label: option.text })),
+    getQuality: () => active?.quality ?? -1,
+    getLowLatency: () => Boolean(active?.lowLatency),
+    onQualityChange: (nextQuality) => { qualityMenu.value = String(nextQuality); qualityMenu.dispatchEvent(new Event('change')); },
+    onLowLatencyChange: () => latency.click(),
+    onPersistVolume: () => persistVolume(video)
+  });
+  cleanup.push(() => reactControls.destroy());
   const fail = (reason: string) => restore(reason); if (Hls.isSupported()) { const hls = new Hls({ lowLatencyMode: lowLatency, liveSyncDurationCount: lowLatency ? 2 : 4, liveMaxLatencyDurationCount: lowLatency ? 5 : 10, backBufferLength: 30 }); active.hls = hls;
     const recoverAtLive = (reason: string) => { if (!active || active.hls !== hls || Date.now() - active.lastRecovery < 8000) return; active.lastRecovery = Date.now(); hls.stopLoad(); hls.loadSource(active.source); hls.startLoad(-1); window.dispatchEvent(new CustomEvent('twitch-adblock-custom-player-status', { detail: JSON.stringify({ state: 'stream-recovered', reason }) })); };
     hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) fail(`hls-${data.type}`); else if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) recoverAtLive('buffer-stalled'); });
@@ -237,6 +253,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       if (selectedHeight !== undefined) active.quality = hls.levels.findIndex((level) => (level.height || verifiedMediaHeight) === selectedHeight);
       hls.currentLevel = active.quality;
       qualityMenu.value = String(active.quality);
+      reactControls.refresh();
       if (wasRestored && active.quality === -1 && hls.levels.length) {
         const best = hls.levels.reduce((index, level, next) => level.height > hls.levels[index].height || (level.height === hls.levels[index].height && level.bitrate > hls.levels[index].bitrate) ? next : index, 0);
         hls.nextAutoLevel = best;

@@ -10,5 +10,5 @@ export default defineConfig({
     content: resolve(root, 'src/content/twitch-observer.ts'),
     pageHook: resolve(root, 'src/content/page-hook.ts')
   }, output: { entryFileNames: '[name].js', chunkFileNames: 'chunks/[name]-[hash].js', assetFileNames: '[name][extname]' } } },
-  test: { environment: 'jsdom', include: ['tests/**/*.test.ts'] }
+  test: { environment: 'jsdom', include: ['tests/**/*.test.ts'], setupFiles: ['tests/setup.ts'] }
 });
