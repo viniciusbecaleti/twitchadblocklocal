@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { ChevronRight, Fullscreen, Gauge, Pause, Play, Settings, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
@@ -21,12 +21,14 @@ export type PlayerControlsOptions = {
 
 export type PlayerControls = { refresh: () => void; destroy: () => void };
 
-const iconButton: CSSProperties = { display: 'grid', placeItems: 'center', width: 36, height: 36, border: 0, borderRadius: 4, padding: 6, background: 'transparent', color: '#fff', cursor: 'pointer' };
+const iconButton: CSSProperties = { display: 'grid', placeItems: 'center', width: 50, height: 50, border: '1px solid rgba(255,255,255,.08)', borderRadius: 999, padding: 6, background: 'rgba(14,12,15,.58)', color: '#fff', cursor: 'pointer', boxShadow: '0 3px 12px rgba(0,0,0,.22)', transition: 'background 150ms ease,box-shadow 150ms ease,transform 150ms ease' };
 
-function IconButton({ title, children, onClick }: { title: string; children: ReactNode; onClick: () => void }): React.ReactElement {
+type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'title'> & { title: string; children: ReactNode; bare?: boolean };
+
+const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({ title, children, onMouseEnter, onMouseLeave, style, bare = false, ...props }, ref): ReactElement {
   const [hovered, setHovered] = useState(false);
-  return <button type="button" title={title} aria-label={title} onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{ ...iconButton, background: hovered ? 'rgba(255,255,255,.15)' : 'transparent' }}>{children}</button>;
-}
+  return <button ref={ref} type="button" title={title} aria-label={title} {...props} onMouseEnter={(event) => { setHovered(true); onMouseEnter?.(event); }} onMouseLeave={(event) => { setHovered(false); onMouseLeave?.(event); }} style={{ ...iconButton, ...(bare ? { width: 50, height: 50, border: 0, background: 'transparent', boxShadow: 'none' } : {}), background: hovered ? (bare ? 'rgba(255,255,255,.08)' : 'rgba(63,58,60,.78)') : (bare ? 'transparent' : 'rgba(14,12,15,.58)'), boxShadow: hovered && !bare ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : undefined, ...style }}>{children}</button>;
+});
 
 function PlayerControlsView({ options, revision }: { options: PlayerControlsOptions; revision: number }): React.ReactElement {
   const { video, host } = options;
@@ -72,11 +74,11 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36 }}>
         <IconButton title={playing ? 'Pausar' : 'Reproduzir'} onClick={() => { void (video.paused ? video.play() : video.pause()); }}>
-          {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
+          {playing ? <Pause size={27} fill="currentColor" /> : <Play size={27} fill="currentColor" />}
         </IconButton>
-        <div onMouseEnter={() => { setVolumeOpen(true); reveal(); }} onMouseLeave={() => setVolumeOpen(false)} style={{ display: 'flex', alignItems: 'center', borderRadius: 18, background: volumeOpen ? 'rgba(0,0,0,.68)' : 'transparent', transition: 'background 180ms ease' }}>
-          <IconButton title={muted ? 'Ativar som' : 'Silenciar'} onClick={() => { video.muted = !video.muted; options.onPersistVolume(); }}>
-            {muted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+        <div onMouseEnter={() => { setVolumeOpen(true); reveal(); }} onMouseLeave={() => setVolumeOpen(false)} style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,.08)', borderRadius: 999, background: volumeOpen ? 'rgba(77,72,74,.66)' : 'rgba(14,12,15,.58)', boxShadow: volumeOpen ? '0 0 0 5px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.3)' : '0 3px 12px rgba(0,0,0,.22)', transition: 'background 180ms ease,box-shadow 180ms ease' }}>
+          <IconButton bare title={muted ? 'Ativar som' : 'Silenciar'} onClick={() => { video.muted = !video.muted; options.onPersistVolume(); }}>
+            {muted ? <VolumeX size={27} /> : <Volume2 size={27} />}
           </IconButton>
           <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', width: volumeOpen ? 88 : 0, opacity: volumeOpen ? 1 : 0, transition: 'width 180ms ease,opacity 140ms ease' }}>
             <Slider min={0} max={100} step={1} value={[volume]} onValueChange={([next]) => setPlayerVolume(next)} style={{ margin: '0 7px 0 2px' }} />
@@ -87,16 +89,16 @@ function PlayerControlsView({ options, revision }: { options: PlayerControlsOpti
           <PopoverTrigger asChild>
             <IconButton title={`Configurações · v${options.version}`} onClick={reveal}><Settings size={22} /></IconButton>
           </PopoverTrigger>
-          <PopoverContent container={host} align="end" style={{ width: 296, padding: 8, borderRadius: 12, background: 'rgba(15,15,15,.96)', boxShadow: '0 8px 28px rgba(0,0,0,.48)', backdropFilter: 'blur(12px)', color: '#fff', font: '14px Roboto,Arial,sans-serif' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 44, padding: '0 9px', borderRadius: 7 }}>
-              <SlidersHorizontal size={20} /><span style={{ flex: 1 }}>Qualidade</span>
-              <select aria-label="Qualidade" value={options.getQuality()} onChange={(event) => options.onQualityChange(Number(event.target.value))} style={{ maxWidth: 142, border: 0, background: 'transparent', color: '#d4ceda', font: '13px Roboto,Arial,sans-serif', textAlign: 'right', cursor: 'pointer', outline: 'none' }}>
+          <PopoverContent container={host} side="top" align="end" collisionPadding={20} style={{ width: 390, padding: 16, border: '1px solid rgba(255,255,255,.08)', borderRadius: 24, background: 'rgba(31,26,23,.80)', boxShadow: '0 18px 42px rgba(0,0,0,.48)', backdropFilter: 'blur(18px)', color: '#fff', font: '16px Roboto,Arial,sans-serif' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, minHeight: 64, padding: '0 14px', borderRadius: 14 }}>
+              <SlidersHorizontal size={27} strokeWidth={2.25} /><span style={{ flex: 1 }}>Qualidade</span>
+              <select aria-label="Qualidade" value={options.getQuality()} onChange={(event) => options.onQualityChange(Number(event.target.value))} style={{ maxWidth: 180, border: 0, background: 'transparent', color: '#d4ceda', font: '16px Roboto,Arial,sans-serif', textAlign: 'right', cursor: 'pointer', outline: 'none' }}>
                 {qualities.map((quality) => <option key={quality.value} value={quality.value} style={{ background: '#17131b', color: '#fff' }}>{quality.label}</option>)}
               </select>
-              <ChevronRight size={16} color="#b8b1c0" />
+              <ChevronRight size={20} color="#d4ceda" />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 44, padding: '0 9px', borderRadius: 7 }}>
-              <Gauge size={20} /><span style={{ flex: 1 }}>Baixa latência</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, minHeight: 64, padding: '0 14px', borderRadius: 14 }}>
+              <Gauge size={27} strokeWidth={2.25} /><span style={{ flex: 1 }}>Baixa latência</span>
               <Switch checked={lowLatency} aria-label="Baixa latência" onCheckedChange={options.onLowLatencyChange} />
             </div>
           </PopoverContent>
