@@ -241,7 +241,7 @@ it('detects the end of a startup ad, keeps 360p during checks, then selects HD w
   }
 });
 
-it('after five minutes in HD switches a mid-roll to 360p and keeps it until HD media is clean', async () => {
+it.each([10000, 180000])('keeps fallback live for a %ims break and waits for site HD confirmation', async (adDuration) => {
   vi.useFakeTimers();
   vi.stubGlobal('chrome', { storage: { local: { get: vi.fn().mockResolvedValue({ playerVolume: 0.4, playerMuted: false }) } } });
   let phase: 'live' | 'ad' | 'hd-pending' | 'ready' = 'live';
@@ -252,7 +252,7 @@ it('after five minutes in HD switches a mid-roll to 360p and keeps it until HD m
       const height = type === 'autoplay' && phase === 'ad' ? 360 : 1080;
       return { ok: true, text: async () => `#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=600000,RESOLUTION=${height === 360 ? '640x360' : '1920x1080'}\nhttps://media.example.test/${type}/${height}.m3u8` };
     }
-    const clean = phase === 'live' || phase === 'ready' || parsed.pathname === '/autoplay/360.m3u8';
+    const clean = phase === 'live' || phase === 'ready' || parsed.pathname.startsWith('/autoplay/');
     return { ok: true, text: async () => `#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:10\n#EXTINF:2,${clean ? '' : 'stitched-ad'}\nsegment.ts\n` };
   }));
   document.body.innerHTML = '<div data-a-target="video-player"><div><video></video></div></div>';
@@ -285,16 +285,18 @@ it('after five minutes in HD switches a mid-roll to 360p and keeps it until HD m
     hls.emit('fragment-changed', { frag: live });
     expect(shield.style.display).toBe('none');
     phase = 'hd-pending';
+    // Alternate HD being clean does not prove the site's break has ended.
+    player.start({ channel: 'test', value: 'autoplay', signature: 'hd-alternate', playerType: 'autoplay' });
     // A native token refresh must not evict this working alternate session.
     player.start({ channel: 'test', value: 'new-native-token', signature: 'sig' });
     expect(hls.destroy).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(30000);
+    await vi.advanceTimersByTimeAsync(adDuration);
     expect(hls.loadSource).toHaveBeenCalledTimes(2);
     expect(shield.style.display).toBe('none');
     expect(video.muted).toBe(false);
     expect(document.querySelector('[data-twitch-adblock-player] video')).toBe(video);
     phase = 'ready';
-    await vi.advanceTimersByTimeAsync(15000);
+    await vi.advanceTimersByTimeAsync(30000);
     expect(hls.loadSource).toHaveBeenCalledTimes(3);
     hls.levels = [{ height: 360, bitrate: 600000 }, { height: 1080, bitrate: 6000000 }];
     hls.emit('manifest');

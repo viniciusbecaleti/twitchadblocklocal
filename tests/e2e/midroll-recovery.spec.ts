@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 test('keeps a moving 360p live during delayed HD recovery after a mid-roll', async ({ page }) => {
+  test.setTimeout(45000);
   let phase: 'live' | 'ad' | 'hd-pending' | 'ready' = 'live';
   let prematureHdChecks = 0;
   const started = Date.now();
@@ -29,7 +30,7 @@ test('keeps a moving 360p live during delayed HD recovery after a mid-roll', asy
     }
     if (url.hostname === 'media.test' && url.pathname.endsWith('/live.m3u8')) {
       const clean = phase === 'live' || phase === 'ready' || url.pathname === '/autoplay/360/live.m3u8';
-      if (phase === 'hd-pending' && url.pathname === '/autoplay/1080/live.m3u8') prematureHdChecks += 1;
+      if (phase === 'hd-pending' && url.pathname === '/site/1080/live.m3u8') prematureHdChecks += 1;
       const last = Math.min(ranges.length - 1, Math.floor((Date.now() - started) / 1000) + 3);
       const first = Math.max(0, last - 5);
       const body = `#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:${first}\n#EXT-X-MAP:URI="/init.mp4"\n` + Array.from({ length: last - first + 1 }, (_, index) => `#EXTINF:1,${clean ? '' : 'stitched-ad'}\n/segment${first + index}.m4s\n`).join('');
@@ -61,13 +62,20 @@ test('keeps a moving 360p live during delayed HD recovery after a mid-roll', asy
   await expect(quality).toContainText('360p');
   await expect(quality).not.toContainText('1080p');
   await expect(shield).toBeHidden();
+  await shield.evaluate((element: HTMLElement) => {
+    element.dataset.reopens = '0';
+    new MutationObserver(() => {
+      if (element.style.display !== 'none') element.dataset.reopens = String(Number(element.dataset.reopens) + 1);
+    }).observe(element, { attributes: true, attributeFilter: ['style'] });
+  });
   phase = 'hd-pending';
   await expect.poll(() => prematureHdChecks, { timeout: 10000 }).toBeGreaterThan(0);
   const position = await video.evaluate((node: HTMLVideoElement) => node.currentTime);
   await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThan(position + 1.5);
   await expect(shield).toBeHidden();
   await expect(quality).not.toContainText('1080p');
+  await expect(shield).toHaveAttribute('data-reopens', '0');
   phase = 'ready';
-  await expect(quality).toContainText('1080p', { timeout: 15000 });
+  await expect(quality).toContainText('1080p', { timeout: 30000 });
   await expect(shield).toBeHidden();
 });

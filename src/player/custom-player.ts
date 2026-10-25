@@ -72,6 +72,9 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     let verifiedMediaHeight: number | undefined;
     const masterProbeAbort = new AbortController();
     let adDetected = false;
+    // This remains latched while an alternate 360p session is playing live.
+    // A clean fallback does not mean that the site's ad break has ended.
+    let adBreakActive = false;
     let adShieldVisible = false;
     let displayingLowFallback = false;
     let cleanEdgeAvailable = false;
@@ -109,7 +112,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       // transitions it is the only one that exposes Twitch's low rendition
       // (the same 360p used by the native mini-player), while the alternate
       // entitlements can legitimately be rejected.
-      const playerTypes = adDetected ? ['site', 'embed', 'popout', 'autoplay'] : ['site'];
+      const playerTypes = adBreakActive && !displayingLowFallback ? ['site', 'embed', 'popout', 'autoplay'] : ['site'];
       const pending = new Map<string, string>(playerTypes.map((playerType) => [crypto.randomUUID(), playerType]));
       const abort = new AbortController();
       let done = false;
@@ -141,7 +144,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
           const inspected = await inspectCandidateManifest(manifest, nextSource, async (url) => {
             stage = 'media';
             return fetchPlaylistText(url, abort.signal);
-          }, adDetected);
+          }, adBreakActive && !displayingLowFallback);
           if (inspected.adFree === true) {
             finish({ ...inspected, source: inspected.mediaSource ?? nextSource, masterSource: nextSource, value: candidate.value, signature: candidate.signature, playerType });
           } else if (!done) { stableQuality.reset(playerType); probeStatus('candidate-rejected', `${playerType}: ${inspected.adFree === false ? 'ad-present' : 'unverified-playlist'}`); }
@@ -163,6 +166,9 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     });
     const applyCandidate = (candidate: QualityCandidate) => {
       if (!active || active.hls !== hls || masterUpgradePending) return false;
+      // During a break only the original site entitlement can confirm the
+      // return to HD. Alternate-session HD is not an ad-ended signal.
+      if (adBreakActive && displayingLowFallback && candidate.height > 360 && candidate.playerType !== 'site') return false;
       // Keep a working fallback stable. If playback is shielded, however,
       // a verified clean HD rendition is also a valid way out of the ad.
       if (displayingLowFallback && adDetected && !cleanEdgeAvailable && candidate.height > 360) return false;
@@ -172,6 +178,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       // makes the player flash the waiting shield without improving playback.
       if (displayingLowFallback && candidate.height <= Math.max(360, currentHeight)) return false;
       if (!adShieldVisible && candidate.height > 360 && currentHeight <= 360 && !stableQuality.confirm(candidate.height, candidate.playerType ?? 'site')) return false;
+      if (candidate.height > 360 && candidate.playerType === 'site') adBreakActive = false;
       masterUpgradePending = true;
       masterUpgradeTimeout = window.setTimeout(() => { masterUpgradePending = false; }, 15000);
       selectedHeight = active.quality >= 0 ? hls.levels[active.quality]?.height || verifiedMediaHeight : undefined;
@@ -194,7 +201,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       window.dispatchEvent(new CustomEvent('twitch-adblock-custom-player-status', { detail: JSON.stringify({ state: 'quality-restored', height: candidate.height }) }));
       return true;
     };
-    const recovery = new QualityRecovery(probeSession, applyCandidate);
+    const recovery = new QualityRecovery(probeSession, applyCandidate, Date.now, () => displayingLowFallback ? 10000 : 60000);
     let nativeCandidateInFlight = false;
     active.considerToken = (candidateToken) => {
       if (nativeCandidateInFlight || !active || active.hls !== hls || (candidateToken.value === active.token.value && candidateToken.signature === active.token.signature)) return;
@@ -203,10 +210,10 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
         try {
           const nextSource = sourceFor(candidateToken);
           const manifest = await fetchPlaylistText(nextSource, masterProbeAbort.signal);
-          const inspected = await inspectCandidateManifest(manifest, nextSource, (url) => fetchPlaylistText(url, masterProbeAbort.signal), adDetected);
+          const inspected = await inspectCandidateManifest(manifest, nextSource, (url) => fetchPlaylistText(url, masterProbeAbort.signal), adBreakActive && !displayingLowFallback);
           if (inspected.adFree !== true || !active || active.hls !== hls) return;
           probeStatus('native-live-session', `${inspected.height}p`);
-          applyCandidate({ ...inspected, source: inspected.mediaSource ?? nextSource, masterSource: nextSource, value: candidateToken.value, signature: candidateToken.signature, playerType: candidateToken.playerType });
+          applyCandidate({ ...inspected, source: inspected.mediaSource ?? nextSource, masterSource: nextSource, value: candidateToken.value, signature: candidateToken.signature, playerType: candidateToken.playerType ?? 'site' });
         } catch { /* Native refreshes are advisory; scheduled probes continue. */ }
         finally { nativeCandidateInFlight = false; }
       })();
@@ -217,6 +224,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       if (!active || active.hls !== hls) return;
       const newlyBlocked = !adDetected;
       adDetected = true;
+      adBreakActive = true;
       cleanEdgeAvailable = false;
       cleanPlaybackSince = undefined;
       stableQuality.reset();
@@ -256,6 +264,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
         // when the token, master playlist and resolution stay unchanged.
         shieldAd(false);
         adDetected = false;
+        if (!displayingLowFallback) adBreakActive = false;
         reactControls.refresh();
         recovery.ad(false);
         probeStatus('live-resumed');
@@ -304,6 +313,9 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     hls.loadSource(source); hls.attachMedia(video);
     const checkMaster = async () => {
       if (!active || active.hls !== hls || document.hidden) return;
+      // End-of-break checks run against fresh site tokens in the background.
+      // Do not reload the fallback's master or try its HD during the break.
+      if (adBreakActive && displayingLowFallback) { void recovery.tick(); return; }
       // Recovery may look for a clean low fallback during the break, but HD
       // upgrades wait for the ad-ended transition.
       if (adDetected && !cleanEdgeAvailable) { void recovery.tick(); return; }
@@ -359,6 +371,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     let lastNativeTransition = 0;
     const nativeTransition = () => {
       if (!active || active.hls !== hls || Date.now() - lastNativeTransition < 1500) return;
+      if (adBreakActive && displayingLowFallback) return;
       if (adDetected && !cleanEdgeAvailable) return;
       const currentMax = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
       if (currentMax >= 1080) return;

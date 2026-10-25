@@ -85,7 +85,7 @@ export class QualityRecovery {
   private inFlight = false;
   private disposed = false;
 
-  constructor(private probe: () => Promise<QualityCandidate | null>, private upgrade: (candidate: QualityCandidate) => boolean | void, private now = Date.now) {}
+  constructor(private probe: () => Promise<QualityCandidate | null>, private upgrade: (candidate: QualityCandidate) => boolean | void, private now = Date.now, private maxRetryDelay = () => 60000) {}
 
   qualities(height: number): void {
     this.height = height;
@@ -140,11 +140,11 @@ export class QualityRecovery {
         }
       } else {
         this.attempts += 1;
-        this.delay = this.attempts < 10 ? 10000 : Math.min(this.delay * 2, 60000);
+        this.delay = this.attempts < 10 ? 10000 : Math.min(this.delay * 2, this.maxRetryDelay());
       }
     } catch {
       this.attempts += 1;
-      this.delay = this.attempts < 10 ? 10000 : Math.min(this.delay * 2, 60000);
+      this.delay = this.attempts < 10 ? 10000 : Math.min(this.delay * 2, this.maxRetryDelay());
     } finally {
       this.inFlight = false;
       // An ad-ended transition during a request schedules one follow-up probe.
