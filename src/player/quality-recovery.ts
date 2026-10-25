@@ -66,7 +66,7 @@ export async function inspectCandidateManifest(manifest: string, source: string,
       if (tail.every((fragment) => !adAtLiveEdge({ dateRanges: details.dateRanges, fragments: [fragment] }))) {
         // Pin the validated lower rendition. Loading its original master
         // would let ABR immediately select the HD rendition containing ads.
-        return variant === best && variant.height! <= 360 ? { height: variant.height!, adFree: true } : { height: variant.height!, adFree: true, mediaSource: variant.url };
+        return { height: variant.height!, adFree: true, mediaSource: variant.url };
       }
     } catch (error) { firstError ??= error; }
   }

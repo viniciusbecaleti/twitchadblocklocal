@@ -163,6 +163,12 @@ describe('ad recovery at the live edge', () => {
     expect(await inspectCandidateManifest(master, 'https://example.test/master.m3u8', fetchMedia, true)).toEqual({ height: 1080, adFree: false });
   });
 
+  it('pins the verified 360p media even when it is the only rendition', async () => {
+    const master = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=600000,RESOLUTION=640x360\n360.m3u8';
+    const media = '#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nlive.ts\n';
+    expect(await inspectCandidateManifest(master, 'https://example.test/master.m3u8', async () => media, true)).toEqual({ height: 360, adFree: true, mediaSource: 'https://example.test/360.m3u8' });
+  });
+
   it('rejects HD while ads remain in the playback window even after the last segment becomes clean', async () => {
     const master = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080\n1080.m3u8';
     const media = '#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:10\n#EXTINF:2,stitched-ad\nad.ts\n#EXTINF:2,\nlive.ts\n';

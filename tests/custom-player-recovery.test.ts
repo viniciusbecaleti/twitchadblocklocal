@@ -51,7 +51,7 @@ it.each([360, 1080])('leaves the initial ad shield when a verified clean %ip ses
     expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
     expect(document.querySelector<HTMLVideoElement>('[data-twitch-adblock-player] video')?.muted).toBe(false);
     expect(hls.loadSource.mock.calls.length).toBeGreaterThanOrEqual(2);
-    expect(hls.loadSource.mock.calls[1][0]).toContain(height === 360 ? 'token=fresh' : 'https://media.example.test/live.m3u8');
+    expect(hls.loadSource.mock.calls[1][0]).toBe('https://media.example.test/live.m3u8');
     expect(hls.destroy).not.toHaveBeenCalled();
   } finally {
     window.removeEventListener('twitch-adblock-probe-playback-token', answer);
@@ -106,7 +106,10 @@ it('adopts a clean same-channel token emitted by Twitch for its native mini-play
   await vi.advanceTimersByTimeAsync(0);
   expect(hls.destroy).not.toHaveBeenCalled();
   expect(hls.loadSource).toHaveBeenCalledTimes(2);
-  expect(hls.loadSource.mock.calls[1][0]).toContain('token=native-mini-live-token');
+  expect(hls.loadSource.mock.calls[1][0]).toBe('https://media.example.test/mini.m3u8');
+  hls.emit('fragment-loading', { frag: { type: 'main', level: 0, baseurl: 'https://media.example.test/old-ad.m3u8', title: 'stitched-ad', tagList: [], programDateTime: null } });
+  hls.emit('level', { details: { url: 'https://media.example.test/old-ad.m3u8', dateRanges: {}, fragments: [{ title: 'stitched-ad', tagList: [], programDateTime: null }] } });
+  expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
   expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
   hls.levels = [{ height: 360, bitrate: 600000 }];
   hls.emit('manifest');
@@ -121,7 +124,7 @@ it('adopts a clean same-channel token emitted by Twitch for its native mini-play
   player.start({ channel: 'test', value: 'replacement-mini-live-token', signature: 'replacement-sig' });
   await vi.advanceTimersByTimeAsync(0);
   expect(hls.loadSource).toHaveBeenCalledTimes(3);
-  expect(hls.loadSource.mock.calls[2][0]).toContain('replacement-mini-live-token');
+  expect(hls.loadSource.mock.calls[2][0]).toBe('https://media.example.test/mini.m3u8');
   expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
 });
 
@@ -255,7 +258,7 @@ it('after five minutes in HD switches a mid-roll to 360p and keeps it until HD m
     hls.emit('level', { details: { dateRanges: {}, fragments: [{ title: 'stitched-ad', tagList: [], programDateTime: null }] } });
     await vi.advanceTimersByTimeAsync(0);
     expect(hls.loadSource).toHaveBeenCalledTimes(2);
-    expect(hls.loadSource.mock.calls[1][0]).toContain('token=autoplay');
+    expect(hls.loadSource.mock.calls[1][0]).toBe('https://media.example.test/autoplay/360.m3u8');
     hls.levels = [{ height: 360, bitrate: 600000 }];
     hls.emit('manifest');
     const live = { type: 'main', level: 0, title: '', tagList: [], programDateTime: null };

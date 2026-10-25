@@ -78,6 +78,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     const stableQuality = new StableQuality();
     let mutedBeforeShield: boolean | undefined;
     const shieldAd = (show: boolean) => {
+      if (show === adShieldVisible) return;
       adShieldVisible = show;
       adShield.style.display = show ? 'grid' : 'none';
       // Keep HLS running under the shield. Stopping it here prevents the
@@ -237,11 +238,12 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       // remain in the playlist long after its advertising range has ended.
       return details ? adAtLiveEdge({ dateRanges: details.dateRanges, fragments: [frag] }) : fragmentLooksLikeAd(frag);
     };
+    const isCurrentFragment = (frag: Fragment) => !verifiedMediaHeight || !frag.baseurl || frag.baseurl === active?.source;
     hls.on(Hls.Events.FRAG_LOADING, (_event, data) => {
-      if (data.frag.type === 'main' && isAdFragment(data.frag)) blockAd('fragment-marker');
+      if (data.frag.type === 'main' && isCurrentFragment(data.frag) && isAdFragment(data.frag)) blockAd('fragment-marker');
     });
     hls.on(Hls.Events.FRAG_CHANGED, (_event, data) => {
-      if (data.frag.type !== 'main') return;
+      if (data.frag.type !== 'main' || !isCurrentFragment(data.frag)) return;
       if (isAdFragment(data.frag)) {
         blockAd('playing-fragment-marker');
       } else if (adDetected && cleanEdgeAvailable) {
@@ -255,6 +257,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       }
     });
     hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+      if (verifiedMediaHeight && data.details.url && data.details.url !== active?.source) return;
       const detected = adAtLiveEdge(data.details);
       if (detected !== reportedAd) {
         reportedAd = detected;
