@@ -28,12 +28,11 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
   const original = document.querySelector<HTMLVideoElement>('[data-a-target="video-player"] video, video'); const container = original?.parentElement?.parentElement; if (!original || !container) return;
   const host = document.createElement('section'); host.dataset.twitchAdblockPlayer = 'true'; host.style.cssText = 'position:absolute;inset:0;z-index:20;background:#000;color:#fff;font:13px Roboto,Arial,sans-serif;overflow:hidden';
   host.dataset.twitchAdblockVersion = playerVersion;
+  host.dataset.adProtection = 'inactive';
   if (!document.getElementById('twitch-adblock-layout-style')) { const style = document.createElement('style'); style.id = 'twitch-adblock-layout-style'; style.textContent = '.twitch-adblock-chat-hidden [data-a-target="right-column"],.twitch-adblock-chat-hidden .right-column{display:none!important}.twitch-adblock-chat-hidden [data-a-target="video-player"]{width:100%!important;max-width:none!important}'; document.head.append(style); }
   const video = document.createElement('video'); video.autoplay = true; video.playsInline = true; video.volume = preferredVolume; video.muted = preferredMuted; video.style.cssText = 'width:100%;height:100%;background:#000;display:block';
   const svg = (path: string) => `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="${path}"/></svg>`;
   const icons = { play: 'M8 5v14l11-7z', pause: 'M6 19h4V5H6v14zm8-14v14h4V5h-4z', back: 'M11 8V5l-5 5 5 5v-3c3.31 0 6 1.08 8 4-1-5-4-8-8-8z', forward: 'M13 8V5l5 5-5 5v-3c-3.31 0-6 1.08-8 4 1-5 4-8 8-8z', volume: 'M3 10v4h4l5 4V6L7 10H3zm12.5 2c0-1.18-.68-2.2-1.67-2.7v5.39A2.99 2.99 0 0015.5 12zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z', mute: 'M16.5 12c0-1.18-.68-2.2-1.67-2.7v1.78l1.65 1.65c.01-.24.02-.49.02-.73zM19 12c0 .82-.15 1.61-.41 2.34l1.23 1.23A6.98 6.98 0 0021 12c0-3.17-2.11-5.85-5-6.71v2.06A4.99 4.99 0 0119 12zM4.27 3 3 4.27 7.73 9H3v4h4l5 4v-5.73l4.25 4.25A5.04 5.04 0 0114 16.65v2.06c1.09-.25 2.08-.79 2.88-1.54L19.73 20 21 18.73 4.27 3zM12 6 9.91 7.67 12 9.76V6z', gear: 'M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65-2-3.46-2.49 1a7.38 7.38 0 00-1.69-.98L15 3h-4l-.37 2.95c-.61.25-1.18.58-1.69.98l-2.49-1-2 3.46 2.11 1.65c-.04.32-.07.65-.07.98s.02.66.07.98L4.45 14.65l2 3.46 2.49-1c.51.4 1.08.73 1.69.98L11 21h4l.37-2.95c.61-.25 1.18-.58 1.69-.98l2.49 1 2-3.46-2.11-1.63zM13 16.5A4.5 4.5 0 1113 7a4.5 4.5 0 010 9.5z', fullscreen: 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zm-3-12v2h3v3h2V5h-5z', chat: 'M20 2H4a2 2 0 00-2 2v18l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2z' };
-  const adShield = document.createElement('div'); adShield.setAttribute('aria-live', 'polite'); adShield.style.cssText = 'display:none;position:absolute;inset:0;z-index:1;place-items:center;background:#000;color:#ddd;font:14px Roboto,Arial,sans-serif'; adShield.textContent = 'Buscando transmissão sem anúncios…';
-  adShield.style.display = 'none';
   const controls = document.createElement('div'); controls.style.cssText = 'position:absolute;z-index:2;inset:auto 0 0;padding:46px 12px 9px;background:linear-gradient(transparent,rgba(0,0,0,.9));display:grid;gap:5px;opacity:1;pointer-events:auto;transition:opacity 1000ms ease';
   const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;height:36px'; const btn = (icon: string, title: string) => { const b = document.createElement('button'); b.innerHTML = icon; b.title = title; b.setAttribute('aria-label', title); b.style.cssText = 'display:grid;place-items:center;border:0;background:transparent;color:#fff;cursor:pointer;padding:6px;border-radius:2px'; b.onmouseenter = () => b.style.background = 'rgba(255,255,255,.15)'; b.onmouseleave = () => b.style.background = 'transparent'; return b; };
   const play = btn(svg(icons.play), 'Reproduzir'); const mute = btn(svg(icons.volume), 'Silenciar'); const volumeBox = document.createElement('div'); volumeBox.style.cssText = 'display:flex;align-items:center;overflow:hidden;width:0;opacity:0;transition:width 180ms ease,opacity 140ms ease'; const volumeSlider = document.createElement('input'); volumeSlider.type = 'range'; volumeSlider.min = '0'; volumeSlider.max = '100'; volumeSlider.value = '100'; volumeSlider.setAttribute('aria-label', 'Volume'); volumeSlider.style.cssText = 'width:76px;margin:0 7px 0 2px;accent-color:#fff;cursor:pointer'; volumeBox.append(volumeSlider); const volumeGroup = document.createElement('div'); volumeGroup.style.cssText = 'display:flex;align-items:center;border-radius:18px;transition:background 180ms ease'; volumeGroup.append(mute, volumeBox); const spacer = document.createElement('span'); spacer.style.flex = '1'; const qualityMenu = document.createElement('select'); qualityMenu.title = 'Qualidade'; qualityMenu.style.cssText = 'background:transparent;border:0;color:#ddd;font:13px Roboto,Arial,sans-serif;padding:4px;text-align:right;cursor:pointer'; qualityMenu.append(new Option('Automática', '-1')); const latency = document.createElement('button'); latency.title = 'Alternar baixa latência'; latency.setAttribute('aria-label', 'Baixa latência'); latency.setAttribute('role', 'switch'); latency.style.cssText = 'position:relative;width:38px;height:22px;border:0;border-radius:999px;background:#5f6368;cursor:pointer;padding:0;transition:background 160ms ease'; const latencyKnob = document.createElement('span'); latencyKnob.style.cssText = 'position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.45);transition:transform 160ms ease'; latency.append(latencyKnob); const settings = btn(svg(icons.gear), 'Configurações'); const fullscreen = btn(svg(icons.fullscreen), 'Tela cheia');
@@ -44,7 +43,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
   // playback logic below. The visible interface is rendered by React.
   controls.style.display = 'none'; settingsPanel.style.display = 'none';
   const reactMount = document.createElement('div'); reactMount.style.cssText = 'position:absolute;inset:0;z-index:2;pointer-events:none';
-  host.append(video, adShield, controls, settingsPanel, reactMount);
+  host.append(video, controls, settingsPanel, reactMount);
   const cleanup: Array<() => void> = [];
   const wasMuted = original.muted; const volume = original.volume; if (getComputedStyle(container).position === 'static') container.style.position = 'relative'; container.append(host); original.muted = true; original.volume = 0; active = { host, video, original, wasMuted, volume, token, source, lowLatency, quality, lastRecovery: 0, cleanup: () => cleanup.forEach((stop) => stop()) };
   const reactControls = mountPlayerControls(reactMount, {
@@ -84,10 +83,11 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     const shieldAd = (show: boolean) => {
       if (show === adShieldVisible) return;
       adShieldVisible = show;
-      adShield.style.display = show ? 'grid' : 'none';
-      // Keep HLS running under the shield. Stopping it here prevents the
-      // playlist from delivering the ad-ended transition and can leave the
-      // player permanently on the waiting screen.
+      host.dataset.adProtection = show ? 'active' : 'inactive';
+      // Protection is deliberately state-only: never cover the current
+      // picture with a waiting/error screen while replacement sessions are
+      // checked in the background. HLS must keep running so it can deliver
+      // the ad-ended transition and the visible video stays continuous.
       if (show && mutedBeforeShield === undefined) {
         mutedBeforeShield = video.muted;
         video.muted = true;
@@ -124,7 +124,6 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
         window.removeEventListener('twitch-adblock-playback-probe-result', receive);
         cancelProbe = undefined;
         probeStatus(!candidate ? 'session-probe-unavailable' : candidate.adFree === false ? 'session-still-ad' : candidate.adFree === null ? 'session-unverified' : 'session-ready');
-        if (!candidate && adDetected && !displayingLowFallback) adShield.textContent = 'Não foi possível obter um fluxo sem anúncios. Tentando novamente…';
         resolve(candidate);
       };
       const receive = async (event: Event) => {
@@ -191,7 +190,8 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       active.adLimited = displayingLowFallback;
       reactControls.refresh();
       // Loading a validated playlist is not proof that its media is already
-      // on screen. Keep protection until playback confirms a clean window.
+      // on screen. Keep the internal protection state until playback confirms
+      // a clean window, without covering the video while that happens.
       cleanEdgeAvailable = false;
       cleanPlaybackSince = undefined;
       restoredQuality = true;

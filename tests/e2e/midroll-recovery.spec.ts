@@ -53,7 +53,6 @@ test('keeps a moving 360p live during delayed HD recovery after a mid-roll', asy
   });
   const host = page.locator('[data-twitch-adblock-player]');
   const video = host.locator('video');
-  const shield = host.locator('[aria-live="polite"]');
   const quality = host.locator('select');
   await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThan(0);
   await expect(quality).toContainText('1080p');
@@ -61,21 +60,25 @@ test('keeps a moving 360p live during delayed HD recovery after a mid-roll', asy
   phase = 'ad';
   await expect(quality).toContainText('360p');
   await expect(quality).not.toContainText('1080p');
-  await expect(shield).toBeHidden();
-  await shield.evaluate((element: HTMLElement) => {
-    element.dataset.reopens = '0';
+  await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
+  await expect(host).not.toContainText('Buscando transmissão');
+  await host.evaluate((element: HTMLElement) => {
+    element.dataset.waitingScreens = '0';
     new MutationObserver(() => {
-      if (element.style.display !== 'none') element.dataset.reopens = String(Number(element.dataset.reopens) + 1);
-    }).observe(element, { attributes: true, attributeFilter: ['style'] });
+      if (element.querySelector('[aria-live="polite"]') || element.textContent?.includes('Buscando transmissão')) {
+        element.dataset.waitingScreens = String(Number(element.dataset.waitingScreens) + 1);
+      }
+    }).observe(element, { childList: true, characterData: true, subtree: true });
   });
   phase = 'hd-pending';
   await expect.poll(() => prematureHdChecks, { timeout: 10000 }).toBeGreaterThan(0);
   const position = await video.evaluate((node: HTMLVideoElement) => node.currentTime);
   await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThan(position + 1.5);
-  await expect(shield).toBeHidden();
+  await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
   await expect(quality).not.toContainText('1080p');
-  await expect(shield).toHaveAttribute('data-reopens', '0');
+  await expect(host).toHaveAttribute('data-waiting-screens', '0');
   phase = 'ready';
   await expect(quality).toContainText('1080p', { timeout: 30000 });
-  await expect(shield).toBeHidden();
+  await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
+  await expect(host).toHaveAttribute('data-waiting-screens', '0');
 });

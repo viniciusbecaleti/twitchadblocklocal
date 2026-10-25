@@ -44,15 +44,16 @@ test(`the built player rejects a marked 360p ad with ${delayedUnmutedSettings ? 
     player.start({ channel: 'test', value: 'local-fixture', signature: 'local-fixture' });
   });
   const host = page.locator('[data-twitch-adblock-player]');
-  const shield = host.locator('[aria-live="polite"]');
-  await expect(shield).toBeVisible();
+  await expect(host).toHaveAttribute('data-ad-protection', 'active');
+  await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
+  await expect(host).not.toContainText('Buscando transmissão');
   await host.locator('video').evaluate((video) => { video.dataset.recoveryInstance = 'original'; });
   if (delayedUnmutedSettings) {
     await expect.poll(() => host.locator('video').evaluate((video: HTMLVideoElement) => video.volume)).toBe(0.4);
     await expect(host.locator('video')).toHaveJSProperty('muted', true);
   }
   adFinished = true;
-  await expect(shield).toBeHidden({ timeout: 15000 });
+  await expect(host).toHaveAttribute('data-ad-protection', 'inactive', { timeout: 15000 });
   await expect(host.locator('select')).toContainText('360p');
   expect(await host.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThan(0);
   await expect.poll(() => mediaRequests).toBeGreaterThan(1);
@@ -108,7 +109,8 @@ test('plays an alternate live while the site session still has ads, then restore
   const video = host.locator('video');
   await video.evaluate((node) => { node.dataset.originalInstance = 'true'; });
   await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThan(0);
-  await expect(host.locator('[aria-live="polite"]')).toBeHidden();
+  await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
+  await expect(host).not.toContainText('Buscando transmissão');
   expect(siteHasAd).toBe(true);
   expect(requestedTypes).toEqual(expect.arrayContaining(['embed', 'popout', 'autoplay']));
   await expect(host.locator('select')).toContainText('360p');
@@ -116,5 +118,5 @@ test('plays an alternate live while the site session still has ads, then restore
   // Two scheduled probes must confirm clean HD over at least ten seconds.
   await expect(host.locator('select')).toContainText('1080p', { timeout: 30000 });
   await expect(video).toHaveAttribute('data-original-instance', 'true');
-  await expect(host.locator('[aria-live="polite"]')).toBeHidden();
+  await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
 });

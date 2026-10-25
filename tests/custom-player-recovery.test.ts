@@ -31,7 +31,7 @@ async function confirmCleanPlayback(hls: (typeof instances)[number]): Promise<vo
   hls.emit('fragment-changed', { frag });
 }
 
-it.each([360, 1080])('leaves the initial ad shield when a verified clean %ip session is available', async (height) => {
+it.each([360, 1080])('keeps the video visible while a verified clean %ip session is selected', async (height) => {
   vi.useFakeTimers();
   vi.stubGlobal('chrome', { storage: { local: { get: vi.fn().mockResolvedValue({ playerVolume: 0.4, playerMuted: false }) } } });
   vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, text: async () => url.includes('usher.ttvnw.net') ? `#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=600000,RESOLUTION=${height === 360 ? '640x360' : '1920x1080'}\nhttps://media.example.test/live.m3u8` : '#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:10\n#EXTINF:2,\nlive.ts\n' })));
@@ -56,9 +56,12 @@ it.each([360, 1080])('leaves the initial ad shield when a verified clean %ip ses
     expect(states).toContain('ad-detected');
     expect(states).toContain('session-probe-started');
     expect(states).toContain('session-ready');
-    expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('grid');
+    const host = document.querySelector<HTMLElement>('[data-twitch-adblock-player]')!;
+    expect(host.dataset.adProtection).toBe('active');
+    expect(host.textContent).not.toContain('Buscando transmissão');
+    expect(document.querySelector('[aria-live="polite"]')).toBeNull();
     await confirmCleanPlayback(hls);
-    expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
+    expect(host.dataset.adProtection).toBe('inactive');
     expect(document.querySelector<HTMLVideoElement>('[data-twitch-adblock-player] video')?.muted).toBe(false);
     expect(hls.loadSource.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(hls.loadSource.mock.calls[1][0]).toBe('https://media.example.test/live.m3u8');
@@ -86,12 +89,13 @@ it('keeps a clean 360p live visible even if token verification never answers', a
   const player = (window as Window & { TwitchAdBlockPlayer?: { start: (token: unknown) => void } }).TwitchAdBlockPlayer!;
   player.start({ channel: 'test', value: 'initial', signature: 'sig' });
   const hls = instances.at(-1)!;
-  const shield = document.querySelector<HTMLElement>('[aria-live="polite"]')!;
+  const host = document.querySelector<HTMLElement>('[data-twitch-adblock-player]')!;
   const video = document.querySelector<HTMLVideoElement>('[data-twitch-adblock-player] video')!;
   hls.emit('manifest');
   hls.emit('level', { details: { dateRanges: {}, fragments: [{ programDateTime: null, tagList: [], title: '' }] } });
   await vi.advanceTimersByTimeAsync(60000);
-  expect(shield.style.display).toBe('none');
+  expect(host.dataset.adProtection).toBe('inactive');
+  expect(host.textContent).not.toContain('Buscando transmissão');
   expect(video.muted).toBe(false);
   expect(hls.loadSource).toHaveBeenCalledTimes(1);
 });
@@ -120,8 +124,9 @@ it('adopts a clean same-channel token emitted by Twitch for its native mini-play
   await confirmCleanPlayback(hls);
   hls.emit('fragment-loading', { frag: { type: 'main', level: 0, baseurl: 'https://media.example.test/old-ad.m3u8', title: 'stitched-ad', tagList: [], programDateTime: null } });
   hls.emit('level', { details: { url: 'https://media.example.test/old-ad.m3u8', dateRanges: {}, fragments: [{ title: 'stitched-ad', tagList: [], programDateTime: null }] } });
-  expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
-  expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
+  const host = document.querySelector<HTMLElement>('[data-twitch-adblock-player]')!;
+  expect(host.dataset.adProtection).toBe('inactive');
+  expect(document.querySelector('[aria-live="polite"]')).toBeNull();
   hls.levels = [{ height: 360, bitrate: 600000 }];
   hls.emit('manifest');
   const live = { type: 'main', level: 0, programDateTime: null, tagList: [], title: '' };
@@ -131,13 +136,14 @@ it('adopts a clean same-channel token emitted by Twitch for its native mini-play
   await vi.advanceTimersByTimeAsync(0);
   expect(hls.loadSource).toHaveBeenCalledTimes(2);
   hls.emit('fragment-loading', { frag: { ...live, title: 'stitched-ad' } });
-  expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('grid');
+  expect(host.dataset.adProtection).toBe('active');
+  expect(host.textContent).not.toContain('Buscando transmissão');
   player.start({ channel: 'test', value: 'replacement-mini-live-token', signature: 'replacement-sig' });
   await vi.advanceTimersByTimeAsync(0);
   expect(hls.loadSource).toHaveBeenCalledTimes(3);
   expect(hls.loadSource.mock.calls[2][0]).toBe('https://media.example.test/mini.m3u8');
   await confirmCleanPlayback(hls);
-  expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
+  expect(host.dataset.adProtection).toBe('inactive');
 });
 
 it('unmasks live playback after a mid-roll without a manifest reload, native player events or a token response', async () => {
@@ -155,14 +161,15 @@ it('unmasks live playback after a mid-roll without a manifest reload, native pla
   const probe = vi.fn();
   window.addEventListener('twitch-adblock-probe-playback-token', probe);
   try {
-    const shield = document.querySelector<HTMLElement>('[aria-live="polite"]')!;
+    const host = document.querySelector<HTMLElement>('[data-twitch-adblock-player]')!;
     const video = document.querySelector<HTMLVideoElement>('[data-twitch-adblock-player] video')!;
     const ad = { type: 'main', level: 0, programDateTime: null, tagList: [], title: 'stitched-ad' };
     const live = { ...ad, title: '' };
     hls.emit('level', { details: { dateRanges: {}, fragments: [ad] } });
     hls.emit('fragment-loading', { frag: ad });
     hls.emit('fragment-changed', { frag: ad });
-    expect(shield.style.display).toBe('grid');
+    expect(host.dataset.adProtection).toBe('active');
+    expect(host.textContent).not.toContain('Buscando transmissão');
     expect(video.muted).toBe(true);
     expect(hls.stopLoad).not.toHaveBeenCalled();
     expect(probe).toHaveBeenCalledTimes(4);
@@ -170,17 +177,17 @@ it('unmasks live playback after a mid-roll without a manifest reload, native pla
     // Recovery continues on an HD master even without new playlist events.
     expect(probe).toHaveBeenCalledTimes(8);
     hls.emit('level', { details: { dateRanges: {}, fragments: [live] } });
-    expect(shield.style.display).toBe('grid'); // A clean live edge may still be ahead of buffered ads.
+    expect(host.dataset.adProtection).toBe('active'); // A clean live edge may still be ahead of buffered ads.
     await vi.advanceTimersByTimeAsync(1000);
     hls.emit('fragment-changed', { frag: live });
-    expect(shield.style.display).toBe('grid');
+    expect(host.dataset.adProtection).toBe('active');
     hls.emit('level', { details: { dateRanges: {}, fragments: [ad] } });
     hls.emit('level', { details: { dateRanges: {}, fragments: [live] } });
     hls.emit('fragment-changed', { frag: { ...live, type: 'audio' } });
-    expect(shield.style.display).toBe('grid');
+    expect(host.dataset.adProtection).toBe('active');
     await vi.advanceTimersByTimeAsync(3000);
     hls.emit('fragment-changed', { frag: live });
-    expect(shield.style.display).toBe('none');
+    expect(host.dataset.adProtection).toBe('inactive');
     expect(video.muted).toBe(false);
     expect(hls.loadSource).toHaveBeenCalledTimes(1);
   } finally {
@@ -265,7 +272,7 @@ it.each([10000, 180000])('keeps fallback live for a %ims break and waits for sit
   await vi.advanceTimersByTimeAsync(300000);
   expect(hls.loadSource).toHaveBeenCalledTimes(1);
   const video = document.querySelector<HTMLVideoElement>('[data-twitch-adblock-player] video')!;
-  const shield = document.querySelector<HTMLElement>('[aria-live="polite"]')!;
+  const host = document.querySelector<HTMLElement>('[data-twitch-adblock-player]')!;
   const answer = (event: Event) => {
     const { channel, probeId, playerType } = JSON.parse((event as CustomEvent<string>).detail);
     window.dispatchEvent(new CustomEvent('twitch-adblock-playback-probe-result', { detail: JSON.stringify({ channel, probeId, value: playerType, signature: 'sig' }) }));
@@ -283,7 +290,8 @@ it.each([10000, 180000])('keeps fallback live for a %ims break and waits for sit
     hls.emit('level', { details: { dateRanges: {}, fragments: [live] } });
     await vi.advanceTimersByTimeAsync(3000);
     hls.emit('fragment-changed', { frag: live });
-    expect(shield.style.display).toBe('none');
+    expect(host.dataset.adProtection).toBe('inactive');
+    expect(host.textContent).not.toContain('Buscando transmissão');
     phase = 'hd-pending';
     // Alternate HD being clean does not prove the site's break has ended.
     player.start({ channel: 'test', value: 'autoplay', signature: 'hd-alternate', playerType: 'autoplay' });
@@ -292,7 +300,7 @@ it.each([10000, 180000])('keeps fallback live for a %ims break and waits for sit
     expect(hls.destroy).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(adDuration);
     expect(hls.loadSource).toHaveBeenCalledTimes(2);
-    expect(shield.style.display).toBe('none');
+    expect(host.dataset.adProtection).toBe('inactive');
     expect(video.muted).toBe(false);
     expect(document.querySelector('[data-twitch-adblock-player] video')).toBe(video);
     phase = 'ready';
@@ -301,7 +309,7 @@ it.each([10000, 180000])('keeps fallback live for a %ims break and waits for sit
     hls.levels = [{ height: 360, bitrate: 600000 }, { height: 1080, bitrate: 6000000 }];
     hls.emit('manifest');
     expect(hls.nextAutoLevel).toBe(1);
-    expect(shield.style.display).toBe('none');
+    expect(host.dataset.adProtection).toBe('inactive');
     // A second break must invalidate the previous HD recovery and must be
     // recoverable again at the same 1080p height without a page reload.
     phase = 'ad';
@@ -322,7 +330,7 @@ it.each([10000, 180000])('keeps fallback live for a %ims break and waits for sit
     await vi.advanceTimersByTimeAsync(30000);
     expect(hls.loadSource).toHaveBeenCalledTimes(5);
     await confirmCleanPlayback(hls);
-    expect(shield.style.display).toBe('none');
+    expect(host.dataset.adProtection).toBe('inactive');
   } finally {
     window.removeEventListener('twitch-adblock-probe-playback-token', answer);
   }
