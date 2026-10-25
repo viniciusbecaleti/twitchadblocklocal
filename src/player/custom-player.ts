@@ -161,16 +161,15 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     });
     const applyCandidate = (candidate: QualityCandidate) => {
       if (!active || active.hls !== hls || masterUpgradePending) return false;
-      // While an ad marker is still active, retain only the verified low
-      // fallback. Native player events can advertise HD before the stitched
-      // break ends, which otherwise makes the player oscillate 360p → HD.
-      if (adDetected && !cleanEdgeAvailable && candidate.height > 360) return false;
+      // Keep a working fallback stable. If playback is shielded, however,
+      // a verified clean HD rendition is also a valid way out of the ad.
+      if (displayingLowFallback && adDetected && !cleanEdgeAvailable && candidate.height > 360) return false;
       const currentHeight = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
       // Once the clean 360p mini-player session is running, fresh native
       // tokens for the same/lower quality are only renewals. Reloading them
       // makes the player flash the waiting shield without improving playback.
       if (displayingLowFallback && candidate.height <= Math.max(360, currentHeight)) return false;
-      if (candidate.height > 360 && currentHeight <= 360 && !stableQuality.confirm(candidate.height, candidate.playerType ?? 'site')) return false;
+      if (!adShieldVisible && candidate.height > 360 && currentHeight <= 360 && !stableQuality.confirm(candidate.height, candidate.playerType ?? 'site')) return false;
       masterUpgradePending = true;
       masterUpgradeTimeout = window.setTimeout(() => { masterUpgradePending = false; }, 15000);
       selectedHeight = active.quality >= 0 ? hls.levels[active.quality]?.height || verifiedMediaHeight : undefined;
@@ -182,7 +181,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       active.currentHeight = candidate.height;
       active.adLimited = displayingLowFallback;
       reactControls.refresh();
-      if (displayingLowFallback) shieldAd(false);
+      shieldAd(false);
       restoredQuality = true;
       attemptedMasterHeight = 0;
       hls.loadSource(candidate.source);

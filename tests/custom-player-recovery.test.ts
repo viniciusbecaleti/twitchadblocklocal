@@ -23,10 +23,10 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
 });
 
-it('reacts to the initial ad immediately and can switch to live content at the same 360p resolution', async () => {
+it.each([360, 1080])('leaves the initial ad shield when a verified clean %ip session is available', async (height) => {
   vi.useFakeTimers();
   vi.stubGlobal('chrome', { storage: { local: { get: vi.fn().mockResolvedValue({ playerVolume: 0.4, playerMuted: false }) } } });
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, text: async () => url.includes('usher.ttvnw.net') ? '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=600000,RESOLUTION=640x360\nhttps://media.example.test/live.m3u8' : '#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:10\n#EXTINF:2,\nlive.ts\n' })));
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, text: async () => url.includes('usher.ttvnw.net') ? `#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=600000,RESOLUTION=${height === 360 ? '640x360' : '1920x1080'}\nhttps://media.example.test/live.m3u8` : '#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:10\n#EXTINF:2,\nlive.ts\n' })));
   document.body.innerHTML = '<div data-a-target="video-player"><div><video></video></div></div>';
   await import('../src/player/custom-player');
   const player = (window as Window & { TwitchAdBlockPlayer?: { start: (token: unknown) => void; stop: () => void } }).TwitchAdBlockPlayer!;
@@ -51,7 +51,7 @@ it('reacts to the initial ad immediately and can switch to live content at the s
     expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
     expect(document.querySelector<HTMLVideoElement>('[data-twitch-adblock-player] video')?.muted).toBe(false);
     expect(hls.loadSource.mock.calls.length).toBeGreaterThanOrEqual(2);
-    expect(hls.loadSource.mock.calls[1][0]).toContain('token=fresh');
+    expect(hls.loadSource.mock.calls[1][0]).toContain(height === 360 ? 'token=fresh' : 'https://media.example.test/live.m3u8');
     expect(hls.destroy).not.toHaveBeenCalled();
   } finally {
     window.removeEventListener('twitch-adblock-probe-playback-token', answer);
