@@ -1,6 +1,6 @@
 import { AttrList, DateRange, Fragment, LevelDetails, PlaylistLevelType } from 'hls.js';
 import { describe, expect, it, vi } from 'vitest';
-import { adAtLiveEdge, fragmentLooksLikeAd, inspectCandidateManifest, maxHeight, QualityRecovery, type QualityCandidate } from '../src/player/quality-recovery';
+import { adAtLiveEdge, fragmentLooksLikeAd, inspectCandidateManifest, maxHeight, QualityRecovery, StableQuality, type QualityCandidate } from '../src/player/quality-recovery';
 
 function playlist(time: string, retainAd = true): LevelDetails {
   const details = new LevelDetails('https://example.test/live.m3u8');
@@ -16,6 +16,48 @@ function playlist(time: string, retainAd = true): LevelDetails {
 const candidate = (height: number): QualityCandidate => ({ height, source: `https://example.test/${height}.m3u8`, value: 'fresh-token', signature: 'signature', adFree: true });
 
 describe('ad recovery at the live edge', () => {
+  it('requires sustained HD confirmation and forgets it when ads return', () => {
+    let now = 100000;
+    const stability = new StableQuality(() => now);
+    expect(stability.confirm(1080)).toBe(false);
+    now += 3000;
+    expect(stability.confirm(1080)).toBe(false);
+    stability.reset();
+    now += 3000;
+    expect(stability.confirm(1080)).toBe(false);
+    now += 10000;
+    expect(stability.confirm(1080)).toBe(true);
+    stability.reset();
+    expect(stability.confirm(1080)).toBe(false);
+  });
+
+  it('continues recovery when the player defers an HD candidate', async () => {
+    let now = 100000;
+    const probe = vi.fn().mockResolvedValue(candidate(1080));
+    const apply = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const recovery = new QualityRecovery(probe, apply, () => now);
+    recovery.qualities(360);
+    now += 10000;
+    await recovery.tick();
+    now += 10000;
+    await recovery.tick();
+    expect(apply).toHaveBeenCalledTimes(2);
+    now += 60000;
+    await recovery.tick();
+    expect(apply).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps HD confirmation separate from an alternate session still showing ads', () => {
+    let now = 100000;
+    const stability = new StableQuality(() => now);
+    expect(stability.confirm(1080, 'site')).toBe(false);
+    now += 5000;
+    stability.reset('autoplay');
+    now += 5000;
+    expect(stability.confirm(1080, 'site')).toBe(true);
+    stability.reset('site');
+    expect(stability.confirm(1080, 'site')).toBe(false);
+  });
   it('recognizes an ad fragment before it is requested', () => {
     expect(fragmentLooksLikeAd({ tagList: [['EXT-X-DATERANGE', 'CLASS="twitch-stitched-ad"']], title: null })).toBe(true);
     expect(fragmentLooksLikeAd({ tagList: [['INF', '2']], title: 'live content' })).toBe(false);
@@ -101,7 +143,7 @@ describe('ad recovery at the live edge', () => {
     expect(await inspectCandidateManifest(master, 'https://example.test/master.m3u8', fetchMedia)).toEqual({ height: 1080, adFree: false });
     expect(fetchMedia).toHaveBeenCalledWith('https://example.test/1080.m3u8');
     fetchMedia.mockResolvedValue(media.replace(',stitched-ad', ','));
-    expect(await inspectCandidateManifest(master, 'https://example.test/master.m3u8', fetchMedia)).toEqual({ height: 1080, adFree: true });
+    expect(await inspectCandidateManifest(master, 'https://example.test/master.m3u8', fetchMedia)).toEqual({ height: 1080, adFree: true, mediaSource: 'https://example.test/1080.m3u8' });
     fetchMedia.mockResolvedValue('unavailable');
     expect((await inspectCandidateManifest(master, 'https://example.test/master.m3u8', fetchMedia)).adFree).toBeNull();
   });

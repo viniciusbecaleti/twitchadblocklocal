@@ -28,6 +28,23 @@ export function maxHeight(manifest: string): number {
 
 export type QualityCandidate = { source: string; height: number; value: string; signature: string; adFree: boolean | null; playerType?: string; masterSource?: string };
 
+/** A transient clean HD response must not evict a working live fallback. */
+export class StableQuality {
+  private sessions = new Map<string, { height: number; since: number; last: number }>();
+  constructor(private now = Date.now) {}
+  reset(session?: string): void { if (session) this.sessions.delete(session); else this.sessions.clear(); }
+  confirm(height: number, session = 'site'): boolean {
+    const now = this.now();
+    let confirmation = this.sessions.get(session);
+    if (!confirmation || height !== confirmation.height || now - confirmation.last > 20000) {
+      confirmation = { height, since: now, last: now };
+      this.sessions.set(session, confirmation);
+    }
+    confirmation.last = now;
+    return now - confirmation.since >= 10000;
+  }
+}
+
 /** A master can advertise HD while its media playlist still contains the same ad. */
 export async function inspectCandidateManifest(manifest: string, source: string, fetchMedia: (url: string) => Promise<string>, preferLow = false): Promise<{ height: number; adFree: boolean | null; mediaSource?: string }> {
   const master = M3U8Parser.parseMasterPlaylist(manifest, source);
@@ -49,7 +66,7 @@ export async function inspectCandidateManifest(manifest: string, source: string,
       if (tail.every((fragment) => !adAtLiveEdge({ dateRanges: details.dateRanges, fragments: [fragment] }))) {
         // Pin the validated lower rendition. Loading its original master
         // would let ABR immediately select the HD rendition containing ads.
-        return variant === best ? { height: variant.height!, adFree: true } : { height: variant.height!, adFree: true, mediaSource: variant.url };
+        return variant === best && variant.height! <= 360 ? { height: variant.height!, adFree: true } : { height: variant.height!, adFree: true, mediaSource: variant.url };
       }
     } catch (error) { firstError ??= error; }
   }
@@ -68,7 +85,7 @@ export class QualityRecovery {
   private inFlight = false;
   private disposed = false;
 
-  constructor(private probe: () => Promise<QualityCandidate | null>, private upgrade: (candidate: QualityCandidate) => void, private now = Date.now) {}
+  constructor(private probe: () => Promise<QualityCandidate | null>, private upgrade: (candidate: QualityCandidate) => boolean | void, private now = Date.now) {}
 
   qualities(height: number): void {
     this.height = height;
@@ -115,11 +132,12 @@ export class QualityRecovery {
       const candidate = await this.probe();
       if (this.disposed) return;
       if (candidate && candidate.adFree === true && candidate.height > 0 && (!this.adActive || candidate.height <= 360) && (candidate.height > this.height || this.adActive)) {
-        this.upgrade(candidate);
-        this.adActive = false;
-        this.qualities(candidate.height);
-        this.delay = 10000;
-        this.attempts = 0;
+        if (this.upgrade(candidate) !== false) {
+          this.adActive = false;
+          this.qualities(candidate.height);
+          this.delay = 10000;
+          this.attempts = 0;
+        }
       } else {
         this.attempts += 1;
         this.delay = this.attempts < 10 ? 10000 : Math.min(this.delay * 2, 60000);

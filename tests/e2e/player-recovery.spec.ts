@@ -109,7 +109,8 @@ test('plays an alternate live while the site session still has ads, then restore
   expect(requestedTypes).toEqual(expect.arrayContaining(['embed', 'popout', 'autoplay']));
   await expect(host.locator('select')).toContainText('360p');
   siteHasAd = false;
-  await expect(host.locator('select')).toContainText('1080p', { timeout: 20000 });
+  // Two scheduled probes must confirm clean HD over at least ten seconds.
+  await expect(host.locator('select')).toContainText('1080p', { timeout: 30000 });
   await expect(video).toHaveAttribute('data-original-instance', 'true');
   await expect(host.locator('[aria-live="polite"]')).toBeHidden();
 });

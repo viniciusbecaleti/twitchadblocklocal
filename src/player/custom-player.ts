@@ -1,5 +1,5 @@
 import Hls, { type Fragment } from 'hls.js';
-import { adAtLiveEdge, fragmentLooksLikeAd, inspectCandidateManifest, maxHeight, QualityRecovery, type QualityCandidate } from './quality-recovery';
+import { adAtLiveEdge, fragmentLooksLikeAd, inspectCandidateManifest, maxHeight, QualityRecovery, StableQuality, type QualityCandidate } from './quality-recovery';
 import { fetchPlaylistText, PlaylistRequestError } from './playlist-request';
 import { mountPlayerControls } from './player-controls';
 
@@ -75,6 +75,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     let adShieldVisible = false;
     let displayingLowFallback = false;
     let cleanEdgeAvailable = false;
+    const stableQuality = new StableQuality();
     let mutedBeforeShield: boolean | undefined;
     const shieldAd = (show: boolean) => {
       adShieldVisible = show;
@@ -141,7 +142,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
           }, adDetected);
           if (inspected.adFree === true) {
             finish({ ...inspected, source: inspected.mediaSource ?? nextSource, masterSource: nextSource, value: candidate.value, signature: candidate.signature, playerType });
-          } else if (!done) probeStatus('candidate-rejected', `${playerType}: ${inspected.adFree === false ? 'ad-present' : 'unverified-playlist'}`);
+          } else if (!done) { stableQuality.reset(playerType); probeStatus('candidate-rejected', `${playerType}: ${inspected.adFree === false ? 'ad-present' : 'unverified-playlist'}`); }
         } catch (error) {
           if (!done && playerType) probeStatus('candidate-failed', `${playerType}: ${stage}-${error instanceof PlaylistRequestError ? error.code : 'network-error'}`);
         }
@@ -159,16 +160,17 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       for (const [probeId, playerType] of pending) window.dispatchEvent(new CustomEvent('twitch-adblock-probe-playback-token', { detail: JSON.stringify({ channel: token.channel, probeId, playerType }) }));
     });
     const applyCandidate = (candidate: QualityCandidate) => {
-      if (!active || active.hls !== hls || masterUpgradePending) return;
+      if (!active || active.hls !== hls || masterUpgradePending) return false;
       // While an ad marker is still active, retain only the verified low
       // fallback. Native player events can advertise HD before the stitched
       // break ends, which otherwise makes the player oscillate 360p → HD.
-      if (adDetected && !cleanEdgeAvailable && candidate.height > 360) return;
+      if (adDetected && !cleanEdgeAvailable && candidate.height > 360) return false;
       const currentHeight = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
       // Once the clean 360p mini-player session is running, fresh native
       // tokens for the same/lower quality are only renewals. Reloading them
       // makes the player flash the waiting shield without improving playback.
-      if (displayingLowFallback && candidate.height <= Math.max(360, currentHeight)) return;
+      if (displayingLowFallback && candidate.height <= Math.max(360, currentHeight)) return false;
+      if (candidate.height > 360 && currentHeight <= 360 && !stableQuality.confirm(candidate.height, candidate.playerType ?? 'site')) return false;
       masterUpgradePending = true;
       masterUpgradeTimeout = window.setTimeout(() => { masterUpgradePending = false; }, 15000);
       selectedHeight = active.quality >= 0 ? hls.levels[active.quality]?.height || verifiedMediaHeight : undefined;
@@ -186,6 +188,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       hls.loadSource(candidate.source);
       resumeLive();
       window.dispatchEvent(new CustomEvent('twitch-adblock-custom-player-status', { detail: JSON.stringify({ state: 'quality-restored', height: candidate.height }) }));
+      return true;
     };
     const recovery = new QualityRecovery(probeSession, applyCandidate);
     let nativeCandidateInFlight = false;
@@ -207,16 +210,24 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     cleanup.push(() => { recovery.dispose(); cancelProbe?.(); masterProbeAbort.abort(); if (masterUpgradeTimeout) clearTimeout(masterUpgradeTimeout); });
     let reportedAd = false;
     const blockAd = (reason: string) => {
+      if (!active || active.hls !== hls) return;
       const newlyBlocked = !adDetected;
       adDetected = true;
       cleanEdgeAvailable = false;
+      stableQuality.reset();
+      attemptedMasterHeight = 0;
+      // The fallback is no longer safe once its own playlist contains ads.
+      // Invalidate it so another clean 360p session can replace it too.
+      displayingLowFallback = false;
+      masterUpgradePending = false;
+      if (masterUpgradeTimeout) clearTimeout(masterUpgradeTimeout);
       const currentHeight = Math.max(0, ...hls.levels.map((level) => level.height || verifiedMediaHeight || 0));
       if (active) {
         active.currentHeight = currentHeight || active.currentHeight;
       }
       if (active) active.adLimited = currentHeight > 0 && currentHeight <= 360;
       reactControls.refresh();
-      if (displayingLowFallback) shieldAd(false); else shieldAd(true);
+      shieldAd(true);
       recovery.ad(true);
       void recovery.tick();
       if (newlyBlocked) probeStatus('ad-blocked', reason);
@@ -306,7 +317,9 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
           });
           // Keep the alternate live playing until the higher-quality media
           // is clean too. A master advertising HD is not enough to switch.
-          if (inspected.adFree !== true || inspected.height <= latestMax || !active || active.hls !== hls || active.source !== checkedSource) return;
+          if (inspected.adFree !== true) { stableQuality.reset(active?.token.playerType ?? 'site'); return; }
+          if (inspected.height <= latestMax || !active || active.hls !== hls || active.source !== checkedSource || masterUpgradePending || (adDetected && !cleanEdgeAvailable)) return;
+          if (!stableQuality.confirm(inspected.height, active.token.playerType ?? 'site')) return;
           active.source = inspected.mediaSource ?? freshSource;
           active.masterSource = freshSource;
           verifiedMediaHeight = inspected.mediaSource ? inspected.height : undefined;

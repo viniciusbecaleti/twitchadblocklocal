@@ -117,6 +117,11 @@ it('adopts a clean same-channel token emitted by Twitch for its native mini-play
   await vi.advanceTimersByTimeAsync(0);
   expect(hls.loadSource).toHaveBeenCalledTimes(2);
   hls.emit('fragment-loading', { frag: { ...live, title: 'stitched-ad' } });
+  expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('grid');
+  player.start({ channel: 'test', value: 'replacement-mini-live-token', signature: 'replacement-sig' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(hls.loadSource).toHaveBeenCalledTimes(3);
+  expect(hls.loadSource.mock.calls[2][0]).toContain('replacement-mini-live-token');
   expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
 });
 
@@ -272,6 +277,26 @@ it('after five minutes in HD switches a mid-roll to 360p and keeps it until HD m
     hls.levels = [{ height: 360, bitrate: 600000 }, { height: 1080, bitrate: 6000000 }];
     hls.emit('manifest');
     expect(hls.nextAutoLevel).toBe(1);
+    expect(shield.style.display).toBe('none');
+    // A second break must invalidate the previous HD recovery and must be
+    // recoverable again at the same 1080p height without a page reload.
+    phase = 'ad';
+    hls.emit('level', { details: { dateRanges: {}, fragments: [{ title: 'stitched-ad', tagList: [], programDateTime: null }] } });
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(hls.loadSource).toHaveBeenCalledTimes(4);
+    hls.levels = [{ height: 360, bitrate: 600000 }];
+    hls.emit('manifest');
+    hls.emit('level', { details: { dateRanges: {}, fragments: [live] } });
+    hls.emit('fragment-changed', { frag: live });
+    phase = 'ready';
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(hls.loadSource).toHaveBeenCalledTimes(4);
+    phase = 'hd-pending';
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(hls.loadSource).toHaveBeenCalledTimes(4);
+    phase = 'ready';
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(hls.loadSource).toHaveBeenCalledTimes(5);
     expect(shield.style.display).toBe('none');
   } finally {
     window.removeEventListener('twitch-adblock-probe-playback-token', answer);
