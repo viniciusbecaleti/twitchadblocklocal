@@ -23,6 +23,14 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
 });
 
+async function confirmCleanPlayback(hls: (typeof instances)[number]): Promise<void> {
+  const frag = { type: 'main', level: 0, title: '', tagList: [], programDateTime: null };
+  hls.emit('level', { details: { dateRanges: {}, fragments: [frag] } });
+  hls.emit('fragment-changed', { frag });
+  await vi.advanceTimersByTimeAsync(3000);
+  hls.emit('fragment-changed', { frag });
+}
+
 it.each([360, 1080])('leaves the initial ad shield when a verified clean %ip session is available', async (height) => {
   vi.useFakeTimers();
   vi.stubGlobal('chrome', { storage: { local: { get: vi.fn().mockResolvedValue({ playerVolume: 0.4, playerMuted: false }) } } });
@@ -48,6 +56,8 @@ it.each([360, 1080])('leaves the initial ad shield when a verified clean %ip ses
     expect(states).toContain('ad-detected');
     expect(states).toContain('session-probe-started');
     expect(states).toContain('session-ready');
+    expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('grid');
+    await confirmCleanPlayback(hls);
     expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
     expect(document.querySelector<HTMLVideoElement>('[data-twitch-adblock-player] video')?.muted).toBe(false);
     expect(hls.loadSource.mock.calls.length).toBeGreaterThanOrEqual(2);
@@ -107,6 +117,7 @@ it('adopts a clean same-channel token emitted by Twitch for its native mini-play
   expect(hls.destroy).not.toHaveBeenCalled();
   expect(hls.loadSource).toHaveBeenCalledTimes(2);
   expect(hls.loadSource.mock.calls[1][0]).toBe('https://media.example.test/mini.m3u8');
+  await confirmCleanPlayback(hls);
   hls.emit('fragment-loading', { frag: { type: 'main', level: 0, baseurl: 'https://media.example.test/old-ad.m3u8', title: 'stitched-ad', tagList: [], programDateTime: null } });
   hls.emit('level', { details: { url: 'https://media.example.test/old-ad.m3u8', dateRanges: {}, fragments: [{ title: 'stitched-ad', tagList: [], programDateTime: null }] } });
   expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
@@ -125,6 +136,7 @@ it('adopts a clean same-channel token emitted by Twitch for its native mini-play
   await vi.advanceTimersByTimeAsync(0);
   expect(hls.loadSource).toHaveBeenCalledTimes(3);
   expect(hls.loadSource.mock.calls[2][0]).toBe('https://media.example.test/mini.m3u8');
+  await confirmCleanPlayback(hls);
   expect(document.querySelector<HTMLElement>('[aria-live="polite"]')?.style.display).toBe('none');
 });
 
@@ -159,8 +171,14 @@ it('unmasks live playback after a mid-roll without a manifest reload, native pla
     expect(probe).toHaveBeenCalledTimes(8);
     hls.emit('level', { details: { dateRanges: {}, fragments: [live] } });
     expect(shield.style.display).toBe('grid'); // A clean live edge may still be ahead of buffered ads.
+    await vi.advanceTimersByTimeAsync(1000);
+    hls.emit('fragment-changed', { frag: live });
+    expect(shield.style.display).toBe('grid');
+    hls.emit('level', { details: { dateRanges: {}, fragments: [ad] } });
+    hls.emit('level', { details: { dateRanges: {}, fragments: [live] } });
     hls.emit('fragment-changed', { frag: { ...live, type: 'audio' } });
     expect(shield.style.display).toBe('grid');
+    await vi.advanceTimersByTimeAsync(3000);
     hls.emit('fragment-changed', { frag: live });
     expect(shield.style.display).toBe('none');
     expect(video.muted).toBe(false);
@@ -263,6 +281,7 @@ it('after five minutes in HD switches a mid-roll to 360p and keeps it until HD m
     hls.emit('manifest');
     const live = { type: 'main', level: 0, title: '', tagList: [], programDateTime: null };
     hls.emit('level', { details: { dateRanges: {}, fragments: [live] } });
+    await vi.advanceTimersByTimeAsync(3000);
     hls.emit('fragment-changed', { frag: live });
     expect(shield.style.display).toBe('none');
     phase = 'hd-pending';
@@ -300,6 +319,7 @@ it('after five minutes in HD switches a mid-roll to 360p and keeps it until HD m
     phase = 'ready';
     await vi.advanceTimersByTimeAsync(30000);
     expect(hls.loadSource).toHaveBeenCalledTimes(5);
+    await confirmCleanPlayback(hls);
     expect(shield.style.display).toBe('none');
   } finally {
     window.removeEventListener('twitch-adblock-probe-playback-token', answer);

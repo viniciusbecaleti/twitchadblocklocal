@@ -46,6 +46,7 @@ test(`the built player rejects a marked 360p ad with ${delayedUnmutedSettings ? 
   const host = page.locator('[data-twitch-adblock-player]');
   const shield = host.locator('[aria-live="polite"]');
   await expect(shield).toBeVisible();
+  await host.locator('video').evaluate((video) => { video.dataset.recoveryInstance = 'original'; });
   if (delayedUnmutedSettings) {
     await expect.poll(() => host.locator('video').evaluate((video: HTMLVideoElement) => video.volume)).toBe(0.4);
     await expect(host.locator('video')).toHaveJSProperty('muted', true);
@@ -55,7 +56,10 @@ test(`the built player rejects a marked 360p ad with ${delayedUnmutedSettings ? 
   await expect(host.locator('select')).toContainText('360p');
   expect(await host.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThan(0);
   await expect.poll(() => mediaRequests).toBeGreaterThan(1);
-  expect(masterRequests).toBe(1);
+  // The clean-playback confirmation may span one scheduled master check.
+  // It must not recreate the player or repeatedly reload its master.
+  expect(masterRequests).toBeLessThanOrEqual(2);
+  await expect(host.locator('video')).toHaveAttribute('data-recovery-instance', 'original');
 });
 }
 

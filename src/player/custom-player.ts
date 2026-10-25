@@ -75,6 +75,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     let adShieldVisible = false;
     let displayingLowFallback = false;
     let cleanEdgeAvailable = false;
+    let cleanPlaybackSince: number | undefined;
     const stableQuality = new StableQuality();
     let mutedBeforeShield: boolean | undefined;
     const shieldAd = (show: boolean) => {
@@ -182,7 +183,10 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       active.currentHeight = candidate.height;
       active.adLimited = displayingLowFallback;
       reactControls.refresh();
-      shieldAd(false);
+      // Loading a validated playlist is not proof that its media is already
+      // on screen. Keep protection until playback confirms a clean window.
+      cleanEdgeAvailable = false;
+      cleanPlaybackSince = undefined;
       restoredQuality = true;
       attemptedMasterHeight = 0;
       hls.loadSource(candidate.source);
@@ -214,6 +218,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       const newlyBlocked = !adDetected;
       adDetected = true;
       cleanEdgeAvailable = false;
+      cleanPlaybackSince = undefined;
       stableQuality.reset();
       attemptedMasterHeight = 0;
       // The fallback is no longer safe once its own playlist contains ads.
@@ -246,7 +251,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       if (data.frag.type !== 'main' || !isCurrentFragment(data.frag)) return;
       if (isAdFragment(data.frag)) {
         blockAd('playing-fragment-marker');
-      } else if (adDetected && cleanEdgeAvailable) {
+      } else if (adDetected && cleanEdgeAvailable && cleanPlaybackSince !== undefined && Date.now() - cleanPlaybackSince >= 3000) {
         // Release the shield when actual live video reaches playback, even
         // when the token, master playlist and resolution stay unchanged.
         shieldAd(false);
@@ -268,6 +273,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
         blockAd('playlist-marker');
       } else {
         cleanEdgeAvailable = data.details.fragments.length > 0;
+        if (cleanEdgeAvailable) cleanPlaybackSince ??= Date.now();
         recovery.ad(false);
       }
       if (!detected) void recovery.tick();
