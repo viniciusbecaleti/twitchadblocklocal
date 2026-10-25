@@ -52,11 +52,22 @@ test('keeps a moving 360p live during delayed HD recovery after a mid-roll', asy
     (window as Window & { TwitchAdBlockPlayer?: { start: (token: unknown) => void } }).TwitchAdBlockPlayer!.start({ channel: 'test', value: 'site', signature: 'fixture' });
   });
   const host = page.locator('[data-twitch-adblock-player]');
-  const video = host.locator('video');
+  const video = host.locator('video[data-playback-active="true"]');
   const quality = host.locator('select');
   await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThan(0);
   await expect(quality).toContainText('1080p');
   await expect(host).toHaveAttribute('data-twitch-adblock-version', version);
+  await host.evaluate((element: HTMLElement) => {
+    element.dataset.continuityFailures = '0';
+    const verify = () => {
+      const active = element.querySelectorAll<HTMLVideoElement>('video[data-playback-active="true"]');
+      if (active.length !== 1 || active[0].readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        element.dataset.continuityFailures = String(Number(element.dataset.continuityFailures) + 1);
+      }
+    };
+    const timer = window.setInterval(verify, 20);
+    element.dataset.continuityTimer = String(timer);
+  });
   phase = 'ad';
   await expect(quality).toContainText('360p');
   await expect(quality).not.toContainText('1080p');
@@ -81,4 +92,6 @@ test('keeps a moving 360p live during delayed HD recovery after a mid-roll', asy
   await expect(quality).toContainText('1080p', { timeout: 30000 });
   await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
   await expect(host).toHaveAttribute('data-waiting-screens', '0');
+  await expect(host).toHaveAttribute('data-continuity-failures', '0');
+  await host.evaluate((element: HTMLElement) => window.clearInterval(Number(element.dataset.continuityTimer)));
 });

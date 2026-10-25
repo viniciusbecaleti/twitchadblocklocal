@@ -2,6 +2,7 @@ import Hls, { type Fragment } from 'hls.js';
 import { adAtLiveEdge, fragmentLooksLikeAd, inspectCandidateManifest, maxHeight, QualityRecovery, StableQuality, type QualityCandidate } from './quality-recovery';
 import { fetchPlaylistText, PlaylistRequestError } from './playlist-request';
 import { mountPlayerControls } from './player-controls';
+import { SeamlessHls } from './seamless-hls';
 
 declare const __EXTENSION_VERSION__: string;
 const playerVersion = typeof __EXTENSION_VERSION__ === 'string' ? __EXTENSION_VERSION__ : 'development';
@@ -47,7 +48,7 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
   const cleanup: Array<() => void> = [];
   const wasMuted = original.muted; const volume = original.volume; if (getComputedStyle(container).position === 'static') container.style.position = 'relative'; container.append(host); original.muted = true; original.volume = 0; active = { host, video, original, wasMuted, volume, token, source, lowLatency, quality, lastRecovery: 0, cleanup: () => cleanup.forEach((stop) => stop()) };
   const reactControls = mountPlayerControls(reactMount, {
-    video, host, version: playerVersion,
+    getVideo: () => active?.video ?? video, host, version: playerVersion,
     getQualityOptions: () => Array.from(qualityMenu.options).map((option) => ({ value: Number(option.value), label: option.text })),
     getQuality: () => active?.quality ?? -1,
     getLowLatency: () => Boolean(active?.lowLatency),
@@ -55,11 +56,23 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     isAdLimited: () => Boolean(active?.adLimited),
     onQualityChange: (nextQuality) => { qualityMenu.value = String(nextQuality); qualityMenu.dispatchEvent(new Event('change')); },
     onLowLatencyChange: () => latency.click(),
-    onPersistVolume: () => persistVolume(video)
+    onPersistVolume: () => persistVolume(active?.video ?? video)
   });
   cleanup.push(() => reactControls.destroy());
-  const fail = (reason: string) => restore(reason); if (Hls.isSupported()) { const hls = new Hls({ lowLatencyMode: lowLatency, liveSyncDurationCount: lowLatency ? 2 : 4, liveMaxLatencyDurationCount: lowLatency ? 5 : 10, backBufferLength: 30 }); active.hls = hls;
-    const recoverAtLive = (reason: string) => { if (!active || active.hls !== hls || Date.now() - active.lastRecovery < 8000) return; active.lastRecovery = Date.now(); hls.stopLoad(); hls.loadSource(active.source); hls.startLoad(-1); window.dispatchEvent(new CustomEvent('twitch-adblock-custom-player-status', { detail: JSON.stringify({ state: 'stream-recovered', reason }) })); };
+  const fail = (reason: string) => restore(reason); if (Hls.isSupported()) { let pendingHandoff: { source: string; rollback: () => void } | undefined; const seamlessHls = new SeamlessHls(video, { lowLatencyMode: lowLatency, liveSyncDurationCount: lowLatency ? 2 : 4, liveMaxLatencyDurationCount: lowLatency ? 5 : 10, backBufferLength: 30 }, host, (nextVideo, nextSource) => {
+    if (!active || active.host !== host) return;
+    active.video = nextVideo;
+    nextVideo.volume = preferredVolume;
+    nextVideo.muted = adShieldVisible || preferredMuted;
+    if (pendingHandoff?.source === nextSource) pendingHandoff = undefined;
+    reactControls.refresh();
+  }, (failedSource) => {
+    if (pendingHandoff?.source !== failedSource) return;
+    const failed = pendingHandoff;
+    pendingHandoff = undefined;
+    failed.rollback();
+  }); const hls = seamlessHls as unknown as Hls; active.hls = hls;
+    const recoverAtLive = (reason: string) => { if (!active || active.hls !== hls || Date.now() - active.lastRecovery < 8000) return; active.lastRecovery = Date.now(); seamlessHls.refreshSource(active.source); active.video.play().catch(() => undefined); window.dispatchEvent(new CustomEvent('twitch-adblock-custom-player-status', { detail: JSON.stringify({ state: 'stream-recovered', reason }) })); };
     hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) fail(`hls-${data.type}`); else if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) recoverAtLive('buffer-stalled'); });
     let cancelProbe: (() => void) | undefined;
     let restoredQuality = false;
@@ -89,19 +102,19 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       // checked in the background. HLS must keep running so it can deliver
       // the ad-ended transition and the visible video stays continuous.
       if (show && mutedBeforeShield === undefined) {
-        mutedBeforeShield = video.muted;
-        video.muted = true;
-        video.play()?.catch(() => undefined);
+        mutedBeforeShield = active?.video.muted ?? video.muted;
+        if (active) active.video.muted = true;
+        (active?.video ?? video).play()?.catch(() => undefined);
       } else if (!show && mutedBeforeShield !== undefined) {
-        video.muted = mutedBeforeShield;
+        (active?.video ?? video).muted = mutedBeforeShield;
         mutedBeforeShield = undefined;
       }
     };
     active.applyAudioSettings = () => {
       if (adShieldVisible) mutedBeforeShield = preferredMuted;
-      video.muted = adShieldVisible || preferredMuted;
+      if (active) active.video.muted = adShieldVisible || preferredMuted;
     };
-    const resumeLive = () => { hls.startLoad(-1); video.play()?.catch(() => undefined); };
+    const resumeLive = () => { hls.startLoad(-1); (active?.video ?? video).play()?.catch(() => undefined); };
     const probeStatus = (state: string, detail?: string) => window.dispatchEvent(new CustomEvent('twitch-adblock-custom-player-status', { detail: JSON.stringify({ state, detail }) }));
     const probeSession = () => new Promise<QualityCandidate | null>((resolve) => {
       probeStatus('session-probe-started');
@@ -177,6 +190,11 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       // makes the player flash the waiting shield without improving playback.
       if (displayingLowFallback && candidate.height <= Math.max(360, currentHeight)) return false;
       if (!adShieldVisible && candidate.height > 360 && currentHeight <= 360 && !stableQuality.confirm(candidate.height, candidate.playerType ?? 'site')) return false;
+      const before = {
+        token: active.token, source: active.source, masterSource: active.masterSource,
+        verifiedMediaHeight, displayingLowFallback, currentHeight: active.currentHeight,
+        adLimited: active.adLimited, adBreakActive, selectedHeight
+      };
       if (candidate.height > 360 && candidate.playerType === 'site') adBreakActive = false;
       masterUpgradePending = true;
       masterUpgradeTimeout = window.setTimeout(() => { masterUpgradePending = false; }, 15000);
@@ -196,7 +214,25 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
       cleanPlaybackSince = undefined;
       restoredQuality = true;
       attemptedMasterHeight = 0;
-      hls.loadSource(candidate.source);
+      const handoffStarted = seamlessHls.loadSource(candidate.source);
+      if (handoffStarted) pendingHandoff = { source: candidate.source, rollback: () => {
+        if (!active || active.hls !== hls) return;
+        active.token = before.token;
+        active.source = before.source;
+        active.masterSource = before.masterSource;
+        active.currentHeight = before.currentHeight;
+        active.adLimited = before.adLimited;
+        verifiedMediaHeight = before.verifiedMediaHeight;
+        displayingLowFallback = before.displayingLowFallback;
+        adBreakActive = before.adBreakActive;
+        selectedHeight = before.selectedHeight;
+        masterUpgradePending = false;
+        if (masterUpgradeTimeout) clearTimeout(masterUpgradeTimeout);
+        restoredQuality = false;
+        reactControls.refresh();
+        recovery.qualities(before.currentHeight ?? 0);
+        recovery.ad(adDetected);
+      } };
       resumeLive();
       window.dispatchEvent(new CustomEvent('twitch-adblock-custom-player-status', { detail: JSON.stringify({ state: 'quality-restored', height: candidate.height }) }));
       return true;
@@ -340,6 +376,11 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
           if (inspected.adFree !== true) { stableQuality.reset(active?.token.playerType ?? 'site'); return; }
           if (inspected.height <= latestMax || !active || active.hls !== hls || active.source !== checkedSource || masterUpgradePending || (adDetected && !cleanEdgeAvailable)) return;
           if (!stableQuality.confirm(inspected.height, active.token.playerType ?? 'site')) return;
+          const before = {
+            source: active.source, masterSource: active.masterSource, verifiedMediaHeight,
+            displayingLowFallback, currentHeight: active.currentHeight,
+            adLimited: active.adLimited, attemptedMasterHeight
+          };
           active.source = inspected.mediaSource ?? freshSource;
           active.masterSource = freshSource;
           verifiedMediaHeight = inspected.mediaSource ? inspected.height : undefined;
@@ -353,7 +394,23 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
           masterUpgradeTimeout = window.setTimeout(() => { masterUpgradePending = false; }, 15000);
           recovery.ad(false);
           recovery.qualities(inspected.height);
-          hls.loadSource(active.source);
+          const handoffStarted = seamlessHls.loadSource(active.source);
+          if (handoffStarted) pendingHandoff = { source: active.source, rollback: () => {
+            if (!active || active.hls !== hls) return;
+            active.source = before.source;
+            active.masterSource = before.masterSource;
+            active.currentHeight = before.currentHeight;
+            active.adLimited = before.adLimited;
+            verifiedMediaHeight = before.verifiedMediaHeight;
+            displayingLowFallback = before.displayingLowFallback;
+            attemptedMasterHeight = before.attemptedMasterHeight;
+            masterUpgradePending = false;
+            if (masterUpgradeTimeout) clearTimeout(masterUpgradeTimeout);
+            restoredQuality = false;
+            reactControls.refresh();
+            recovery.qualities(before.currentHeight ?? 0);
+            recovery.ad(adDetected);
+          } };
           resumeLive();
           window.dispatchEvent(new CustomEvent('twitch-adblock-custom-player-status', { detail: JSON.stringify({ state: 'master-quality-restored', height: availableMax }) }));
           return;
@@ -392,14 +449,15 @@ function mount(token: PlaybackToken, lowLatency = true, quality = -1): void {
     active.masterProbe = window.setInterval(() => void checkMaster(), 5000);
     void checkMaster();
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = source; else fail('hls-not-supported');
-  const update = () => { play.innerHTML = svg(video.paused ? icons.play : icons.pause); mute.innerHTML = svg(video.muted || !video.volume ? icons.mute : icons.volume); volumeSlider.value = String(Math.round((video.muted ? 0 : video.volume) * 100)); const enabled = Boolean(active?.lowLatency); latency.setAttribute('aria-checked', String(enabled)); latency.style.background = enabled ? '#fff' : '#5f6368'; latencyKnob.style.transform = enabled ? 'translateX(16px)' : 'translateX(0)'; latencyKnob.style.background = enabled ? '#000' : '#fff'; }; ['play', 'pause', 'volumechange'].forEach((event) => video.addEventListener(event, update)); update();
-  play.onclick = () => video.paused ? video.play().catch(() => undefined) : video.pause(); mute.onclick = () => { video.muted = !video.muted; persistVolume(video); }; volumeSlider.oninput = () => { video.volume = Number(volumeSlider.value) / 100; video.muted = video.volume === 0; persistVolume(video); }; volumeGroup.addEventListener('mouseenter', () => { volumeGroup.style.background = 'rgba(0,0,0,.68)'; volumeBox.style.width = '88px'; volumeBox.style.opacity = '1'; }); volumeGroup.addEventListener('mouseleave', () => { volumeGroup.style.background = 'transparent'; volumeBox.style.width = '0'; volumeBox.style.opacity = '0'; });
+  const currentVideo = () => active?.video ?? video;
+  const update = () => { const media = currentVideo(); play.innerHTML = svg(media.paused ? icons.play : icons.pause); mute.innerHTML = svg(media.muted || !media.volume ? icons.mute : icons.volume); volumeSlider.value = String(Math.round((media.muted ? 0 : media.volume) * 100)); const enabled = Boolean(active?.lowLatency); latency.setAttribute('aria-checked', String(enabled)); latency.style.background = enabled ? '#fff' : '#5f6368'; latencyKnob.style.transform = enabled ? 'translateX(16px)' : 'translateX(0)'; latencyKnob.style.background = enabled ? '#000' : '#fff'; }; ['play', 'pause', 'volumechange'].forEach((event) => video.addEventListener(event, update)); update();
+  play.onclick = () => { const media = currentVideo(); return media.paused ? media.play().catch(() => undefined) : media.pause(); }; mute.onclick = () => { const media = currentVideo(); media.muted = !media.muted; persistVolume(media); }; volumeSlider.oninput = () => { const media = currentVideo(); media.volume = Number(volumeSlider.value) / 100; media.muted = media.volume === 0; persistVolume(media); }; volumeGroup.addEventListener('mouseenter', () => { volumeGroup.style.background = 'rgba(0,0,0,.68)'; volumeBox.style.width = '88px'; volumeBox.style.opacity = '1'; }); volumeGroup.addEventListener('mouseleave', () => { volumeGroup.style.background = 'transparent'; volumeBox.style.width = '0'; volumeBox.style.opacity = '0'; });
   const closeSettings = () => { settingsPanel.style.display = 'none'; }; const outsideSettings = (event: PointerEvent) => { const target = event.target; if (settingsPanel.style.display !== 'none' && target instanceof Node && !settingsPanel.contains(target) && !settings.contains(target)) closeSettings(); }; document.addEventListener('pointerdown', outsideSettings);
   cleanup.push(() => document.removeEventListener('pointerdown', outsideSettings));
   qualityMenu.onchange = () => { if (active?.hls) { active.quality = Number(qualityMenu.value); active.hls.currentLevel = active.quality; } }; latency.onclick = () => { if (active) { const { token: next, quality: q } = active; mount({ ...next, force: true }, !active.lowLatency, q); } }; settings.onclick = () => { settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none'; }; fullscreen.onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else host.requestFullscreen().catch(() => undefined); };
   let timer: number | undefined; let interacting = false;
-  const showControls = () => { if (timer) clearTimeout(timer); controls.style.transition = 'opacity 0ms'; controls.style.opacity = '1'; controls.style.pointerEvents = 'auto'; if (!interacting && !video.paused) timer = window.setTimeout(hideControls, 2000); };
-  const hideControls = () => { if (!interacting && !video.paused) { controls.style.transition = 'opacity 1000ms ease'; controls.style.opacity = '0'; controls.style.pointerEvents = 'none'; } };
+  const showControls = () => { if (timer) clearTimeout(timer); controls.style.transition = 'opacity 0ms'; controls.style.opacity = '1'; controls.style.pointerEvents = 'auto'; if (!interacting && !currentVideo().paused) timer = window.setTimeout(hideControls, 2000); };
+  const hideControls = () => { if (!interacting && !currentVideo().paused) { controls.style.transition = 'opacity 1000ms ease'; controls.style.opacity = '0'; controls.style.pointerEvents = 'none'; } };
   host.addEventListener('mousemove', showControls); host.addEventListener('mouseenter', showControls); host.addEventListener('mouseleave', () => { interacting = false; if (timer) clearTimeout(timer); timer = window.setTimeout(hideControls, 2000); });
   controls.addEventListener('mouseenter', () => { interacting = true; if (timer) clearTimeout(timer); controls.style.opacity = '1'; controls.style.pointerEvents = 'auto'; });
   controls.addEventListener('mouseleave', () => { interacting = false; showControls(); });

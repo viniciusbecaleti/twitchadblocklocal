@@ -11,7 +11,7 @@ import { Spinner } from '../components/ui/spinner';
 type QualityOption = { value: number; label: string };
 
 export type PlayerControlsOptions = {
-  video: HTMLVideoElement;
+  getVideo: () => HTMLVideoElement;
   host: HTMLElement;
   version: string;
   getQualityOptions: () => QualityOption[];
@@ -42,7 +42,8 @@ function MenuButton({ children, active = false, onMouseEnter, onMouseLeave, styl
 }
 
 function PlayerControlsView({ options, revision }: { options: PlayerControlsOptions; revision: number }): React.ReactElement {
-  const { video, host } = options;
+  const { host } = options;
+  const video = options.getVideo();
   const [playing, setPlaying] = useState(!video.paused);
   const [muted, setMuted] = useState(video.muted || video.volume === 0);
   const [volume, setVolume] = useState(Math.round((video.muted ? 0 : video.volume) * 100));

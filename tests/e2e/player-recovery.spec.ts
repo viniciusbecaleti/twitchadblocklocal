@@ -44,23 +44,23 @@ test(`the built player rejects a marked 360p ad with ${delayedUnmutedSettings ? 
     player.start({ channel: 'test', value: 'local-fixture', signature: 'local-fixture' });
   });
   const host = page.locator('[data-twitch-adblock-player]');
+  const activeVideo = host.locator('video[data-playback-active="true"]');
   await expect(host).toHaveAttribute('data-ad-protection', 'active');
   await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
   await expect(host).not.toContainText('Buscando transmissão');
-  await host.locator('video').evaluate((video) => { video.dataset.recoveryInstance = 'original'; });
   if (delayedUnmutedSettings) {
-    await expect.poll(() => host.locator('video').evaluate((video: HTMLVideoElement) => video.volume)).toBe(0.4);
-    await expect(host.locator('video')).toHaveJSProperty('muted', true);
+    await expect.poll(() => activeVideo.evaluate((video: HTMLVideoElement) => video.volume)).toBe(0.4);
+    await expect(activeVideo).toHaveJSProperty('muted', true);
   }
   adFinished = true;
   await expect(host).toHaveAttribute('data-ad-protection', 'inactive', { timeout: 15000 });
   await expect(host.locator('select')).toContainText('360p');
-  expect(await host.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThan(0);
+  expect(await activeVideo.evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThan(0);
   await expect.poll(() => mediaRequests).toBeGreaterThan(1);
   // The clean-playback confirmation may span one scheduled master check.
   // It must not recreate the player or repeatedly reload its master.
   expect(masterRequests).toBeLessThanOrEqual(2);
-  await expect(host.locator('video')).toHaveAttribute('data-recovery-instance', 'original');
+  await expect(activeVideo).toHaveCount(1);
 });
 }
 
@@ -106,8 +106,7 @@ test('plays an alternate live while the site session still has ads, then restore
     player.start({ channel: 'test', value: 'site', signature: 'fixture' });
   });
   const host = page.locator('[data-twitch-adblock-player]');
-  const video = host.locator('video');
-  await video.evaluate((node) => { node.dataset.originalInstance = 'true'; });
+  const video = host.locator('video[data-playback-active="true"]');
   await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThan(0);
   await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
   await expect(host).not.toContainText('Buscando transmissão');
@@ -117,6 +116,7 @@ test('plays an alternate live while the site session still has ads, then restore
   siteHasAd = false;
   // Two scheduled probes must confirm clean HD over at least ten seconds.
   await expect(host.locator('select')).toContainText('1080p', { timeout: 30000 });
-  await expect(video).toHaveAttribute('data-original-instance', 'true');
+  await expect(video).toHaveCount(1);
+  await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThan(0);
   await expect(host.locator('[aria-live="polite"]')).toHaveCount(0);
 });
